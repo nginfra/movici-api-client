@@ -1,8 +1,10 @@
-from .common import command
+from .common import command, Controller
 
 
-class ProjectController:
-    @command
+class ProjectController(Controller):
+    name = "project"
+
+    @command(name="projects")
     def list(self):
         ...
 
