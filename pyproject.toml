@@ -23,6 +23,11 @@ exclude = '''(
 )
 '''
 
+[tool.isort]
+profile = "black"
+line_length = 99
+known_first_party = ["movici_api_client"]
+
 [tool.poetry]
 name = "movici-api-client"
 version = "0.1.0"
@@ -36,9 +41,13 @@ packages = [{ include = "movici_api_client", from = "src" }]
 python = "^3.8"
 httpx = "^0.23.1"
 click = "^8.1.3"
+questionary = "^1.10.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+
+[tool.poetry.scripts]
+movici = 'movici_api_client.cli:__main__'

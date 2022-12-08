@@ -1,10 +1,25 @@
+import typing as t
 from json import JSONDecodeError
+
+import questionary
+
 from movici_api_client.api import Client, Response
 from movici_api_client.api.auth import MoviciTokenAuth
 from movici_api_client.api.requests import GetProjects, Login
-from .utils import argument, assert_context, command, prompt, echo, Abort
+from movici_api_client.cli.exceptions import InvalidProject
+
 from . import dependencies
 from .config import Config, get_config, write_config
+from .utils import (
+    Abort,
+    argument,
+    assert_context,
+    command,
+    echo,
+    get_project_uuids,
+    prompt,
+    prompt_choices,
+)
 
 
 def main():
@@ -61,10 +76,17 @@ def prompt_username_and_password():
 
 
 @command(name="activate-project")
-@argument("project", default='')
+@argument("project", default="")
 def activate_project(project):
-    client = dependencies.get(Client)
-    all_projects = client.request(GetProjects())
-    projects_dict = {p['name']: p['uuid'] for p in all_projects['projects']}
-    
-    echo(list(projects_dict))
+    config = dependencies.get(Config)
+    context = assert_context(config)
+
+    projects_dict = get_project_uuids()
+    if not project:
+        project = prompt_choices("Choose a project", sorted(projects_dict))
+    if project not in projects_dict:
+        raise InvalidProject(project)
+
+    context.project = project
+    write_config(config)
+    echo(f"Project {project} succefully activated!")
