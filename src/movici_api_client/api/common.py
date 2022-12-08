@@ -57,5 +57,5 @@ def urljoin(*parts):
     return reduce(urljoin_, (str(part) + "/" for part in parts))
 
 
-def pick(obj, attrs: t.List[str]):
-    return {key: getattr(obj, key) for key in attrs}
+def pick(obj, attrs: t.List[str], default=None):
+    return {key: getattr(obj, key, default) for key in attrs}

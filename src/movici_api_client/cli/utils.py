@@ -1,7 +1,9 @@
 import functools
 import typing as t
+import uuid
 
 import questionary
+import tabulate
 from click import Abort, confirm, echo, prompt
 
 from movici_api_client.api.client import Client, Response
@@ -23,6 +25,7 @@ from movici_api_client.cli.exceptions import (
     NoCurrentContext,
     Unauthenticated,
 )
+from movici_api_client.cli.ui import format_table
 
 # Show static analysis tools that we're using these imports with the intent to export, proxy and
 # possibly adapt them
@@ -39,6 +42,7 @@ def assert_context(config: Config):
         raise NoCurrentContext()
     return rv
 
+
 def assert_current_context():
     config = dependencies.get(Config)
     return assert_context(config)
@@ -51,6 +55,7 @@ def assert_active_project(project=None):
             raise NoActiveProject()
         project = context.project
     return assert_project_uuid(project)
+
 
 def assert_project_uuid(project: str):
     projects_dict = get_project_uuids()
@@ -145,3 +150,23 @@ def prompt_choices(question: str, choices: t.Sequence[str]):
         use_shortcuts=len(choices) < 36,
         use_arrow_keys=True,
     ).unsafe_ask()
+
+
+def tabulate_results(func=None, /, keys=()):
+    if func is None:
+        return functools.partial(tabulate_results, keys=keys)
+    @functools.wraps(func)
+    def decorated(*args, **kwargs):
+        result = func(*args, **kwargs)
+        echo(format_table(result, keys))
+
+    return decorated
+
+
+def validate_uuid(entry: str):
+    try:
+        uuid.UUID(entry)
+    except ValueError:
+        return False
+    
+    return True

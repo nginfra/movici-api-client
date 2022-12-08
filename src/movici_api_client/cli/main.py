@@ -48,8 +48,7 @@ def login(ask_username):
     client = dependencies.get(Client)
     context = assert_current_context()
     echo(f"Login to {context.url}:")
-    handler = LoginController(client, context)
-    handler.login(ask_username)
+    LoginController(client, context).login(ask_username)
     write_config()
     echo("Success!")
 
