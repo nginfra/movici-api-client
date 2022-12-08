@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import functools
 import typing as t
+
 
 __MOVICI_CLI_OPTIONS__ = "__movici_cli_options__"
 
@@ -28,19 +28,6 @@ def remove_options(obj, key: str):
         del options[key]
 
 
-def command(func=None, /, name=None):
-    if func is None:
-        return functools.partial(command, name=name)
-    set_options(func, OPTIONS_COMMAND, {"name": name})
-    return func
-
-
-def iter_commands(obj: Controller):
-    for key in dir(obj):
-        val = getattr(obj, key)
-        if (opts := get_options(val, OPTIONS_COMMAND)) is not None:
-            yield (key, val, opts)
-
-
 class Controller:
     name: str
+    reverse: bool = True

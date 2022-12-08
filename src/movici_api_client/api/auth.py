@@ -6,7 +6,7 @@ import typing as t
 class MoviciTokenAuth(Auth):
     auth_token: t.Optional[str]
 
-    def __init__(self, auth_token) -> None:
+    def __init__(self, auth_token):
         self.auth_token = auth_token
 
     def __call__(self, config: dict) -> dict:
@@ -20,7 +20,7 @@ class MoviciTokenAuth(Auth):
 
 class MoviciLoginAuth(MoviciTokenAuth):
     def __init__(self, username: str, password: str) -> None:
-        super.__init__(None)
+        super().__init__(None)
         self.username = username
         self.password = password
 
