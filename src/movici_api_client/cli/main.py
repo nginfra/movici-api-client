@@ -1,23 +1,21 @@
 import typing as t
 from json import JSONDecodeError
 
-import questionary
-
-from movici_api_client.api import Client, Response
-from movici_api_client.api.auth import MoviciTokenAuth
-from movici_api_client.api.requests import GetProjects, Login
-from movici_api_client.cli.exceptions import InvalidProject
+from movici_api_client.api import Client, Response, MoviciTokenAuth
 
 from . import dependencies
 from .config import Config, get_config, write_config
+from .controllers.login import LoginController
+from .exceptions import InvalidProject
 from .utils import (
     Abort,
     argument,
     assert_context,
+    assert_current_context,
     command,
     echo,
     get_project_uuids,
-    prompt,
+    option,
     prompt_choices,
 )
 
@@ -45,34 +43,15 @@ def handle_http_error(resp: Response):
 
 
 @command
-def login():
+@option("-U", "--user", "ask_username", is_flag=True, help="always ask for a username")
+def login(ask_username):
     client = dependencies.get(Client)
-    config = dependencies.get(Config)
-    context = assert_context(config)
-
+    context = assert_current_context()
     echo(f"Login to {context.url}:")
-
-    success = False
-
-    def fail(*args, **kwargs):
-        nonlocal success
-        success = False
-        echo("Invalid credentials, try again...")
-        return False
-
-    while True:
-        username, password = prompt_username_and_password()
-        success = True
-        resp = client.request(Login(username, password), on_error=fail)
-        if success:
-            context.auth_token = resp["session"]
-            write_config(config)
-            echo("Success!")
-            break
-
-
-def prompt_username_and_password():
-    return prompt("Username"), prompt("Password", hide_input=True)
+    handler = LoginController(client, context)
+    handler.login(ask_username)
+    write_config()
+    echo("Success!")
 
 
 @command(name="activate-project")

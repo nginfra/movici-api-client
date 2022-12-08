@@ -6,6 +6,8 @@ import os
 import pathlib
 import typing as t
 
+from movici_api_client.cli import dependencies
+
 from .exceptions import InvalidConfig
 
 # "~" is properly expanded using pathlib.Path.expanduser() on all platforms including windows
@@ -42,7 +44,8 @@ def read_config(file: pathlib.Path) -> Config:
     return Config.from_dict(json.loads(file.read_text()))
 
 
-def write_config(config: Config, file: t.Optional[pathlib.Path]=None):
+def write_config(config: Config = None, file: t.Optional[pathlib.Path] = None):
+    config = config or dependencies.get(Config)
     file = pathlib.Path(file) if file is not None else get_config_path()
     file.write_text(json.dumps(config.asdict(), indent=2))
 
@@ -118,10 +121,11 @@ class Config:
         if not isinstance(other, type(self)):
             return False
         return (
-            self.version == other.version and
-            self._current_context == other._current_context and
-            self.contexts == other.contexts
+            self.version == other.version
+            and self._current_context == other._current_context
+            and self.contexts == other.contexts
         )
+
 
 @dataclasses.dataclass
 class Context:
@@ -130,5 +134,3 @@ class Context:
     project: t.Optional[str] = None
     username: t.Optional[str] = None
     auth_token: t.Optional[str] = None
-
-
