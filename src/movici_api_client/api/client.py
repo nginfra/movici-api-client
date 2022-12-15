@@ -1,10 +1,13 @@
 from __future__ import annotations
+
 import contextlib
 import logging
-from .common import BaseApi, Auth, BaseRequest
 import typing as t
+
 import httpx
 from httpx import Response  # do not remove, this is exported to consumers
+
+from .common import Auth, BaseApi, BaseRequest
 
 T = t.TypeVar("T")
 

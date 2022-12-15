@@ -1,7 +1,9 @@
 from unittest.mock import Mock
-from movici_api_client.api.common import urljoin
-import pytest
+
 import httpx
+import pytest
+
+from movici_api_client.api.common import urljoin
 
 
 @pytest.fixture
@@ -19,5 +21,3 @@ def session():
 )
 def test_urljoin(parts, expected):
     assert urljoin(*parts) == expected
-
-

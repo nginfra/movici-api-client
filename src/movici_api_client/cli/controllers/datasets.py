@@ -13,7 +13,7 @@ from movici_api_client.api.requests import (
     UpdateDataset,
 )
 from movici_api_client.cli.dependencies import get
-from movici_api_client.cli.exceptions import InvalidResource, InvalidUsage, NotYetImplemented
+from movici_api_client.cli.exceptions import InvalidResource, InvalidUsage
 from movici_api_client.cli.filetransfer import (
     download_dataset_data,
     download_multiple_dataset_data,
@@ -212,7 +212,6 @@ class DatasetCrontroller(Controller):
         )
         echo("Success!")
 
-
     @command(name="datasets", group="download")
     @download_data_options
     def download_multiple(self, project_uuid, directory, overwrite, no_overwrite):
@@ -224,7 +223,6 @@ class DatasetCrontroller(Controller):
             overwrite=resolve_question_flag(False, default_yes=overwrite, default_no=no_overwrite),
         )
         echo("Success!")
-
 
 
 def get_dataset_uuid(name_or_uuid, project_uuid, client=None):

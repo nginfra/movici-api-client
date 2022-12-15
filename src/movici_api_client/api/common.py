@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import functools
-from urllib.parse import urljoin as urljoin_
-from functools import reduce
 import typing as t
+from functools import reduce
+from urllib.parse import urljoin as urljoin_
+
 from httpx import Response
 
 
@@ -19,7 +21,6 @@ class BaseApi:
 
 
 T = t.TypeVar("T")
-
 
 
 class BaseRequest(t.Generic[T]):
@@ -58,11 +59,13 @@ def unwrap_envelope(envelope):
     def decorator(cls: Request):
         def make_response(self, resp: Response):
             return resp.json()[envelope]
-        
-        cls.make_response=make_response
+
+        cls.make_response = make_response
         return cls
+
     return decorator
-    
+
+
 def urljoin(*parts):
     return reduce(urljoin_, (str(part) + "/" for part in parts))
 

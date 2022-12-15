@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing as t
 
-
 __MOVICI_CLI_OPTIONS__ = "__movici_cli_options__"
 
 OPTIONS_COMMAND = "command"

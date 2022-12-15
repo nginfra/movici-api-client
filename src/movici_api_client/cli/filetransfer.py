@@ -1,7 +1,6 @@
 import contextlib
 import json
 import pathlib
-import typing as t
 
 from tqdm.auto import tqdm
 from tqdm.utils import CallbackIOWrapper
@@ -12,8 +11,8 @@ from movici_api_client.api.requests import (
     AddDatasetData,
     CreateDataset,
     GetDatasetData,
-    GetDatasetTypes,
     GetDatasets,
+    GetDatasetTypes,
     ModifiyDatasetData,
 )
 from movici_api_client.cli.exceptions import InvalidFile
@@ -24,12 +23,9 @@ from .utils import confirm, echo, prompt_choices
 
 @contextlib.contextmanager
 def monitored_file(file: pathlib.Path):
-    with (
-        open(file, "rb") as fobj,
-        tqdm(
-            total=file.stat().st_size, unit="B", unit_scale=True, unit_divisor=1024, desc=file.name
-        ) as t,
-    ):
+    with open(file, "rb") as fobj, tqdm(
+        total=file.stat().st_size, unit="B", unit_scale=True, unit_divisor=1024, desc=file.name
+    ) as t:
         yield CallbackIOWrapper(t.update, fobj, "read")
         t.reset()
 
@@ -71,7 +67,6 @@ class MultipleDatasetUploader:
         all_datasets = client.request(GetDatasets(self.project_uuid))
         dataset_with_data = set(d["name"] for d in all_datasets if d["has_data"])
         dataset_uuids = {d["name"]: d["uuid"] for d in all_datasets}
-        all_types = None
 
         for file in tqdm(list(self.iter_dataset_files()), desc="Processing files"):
             name = file.stem

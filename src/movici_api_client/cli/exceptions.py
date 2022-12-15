@@ -1,5 +1,5 @@
-import pathlib
 import dataclasses
+import pathlib
 
 
 @dataclasses.dataclass
@@ -69,7 +69,8 @@ class InvalidUsage(MoviciCLIError):
     msg: str
     template = "Invalid usage: {msg}"
 
+
 @dataclasses.dataclass
 class InvalidFile(MoviciCLIError):
     file: pathlib.Path
-    template = 'Invalid file: {file!s}'
+    template = "Invalid file: {file!s}"

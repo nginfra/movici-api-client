@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import patch
-from movici_api_client.cli.config import Context
+
+import pytest
+
 import movici_api_client.cli.controllers.login
+from movici_api_client.cli.config import Context
 from movici_api_client.cli.controllers.login import LoginController
 
 

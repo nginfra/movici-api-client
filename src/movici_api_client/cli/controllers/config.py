@@ -4,8 +4,8 @@ from movici_api_client.cli.ui import format_dataclass
 
 from .. import dependencies
 from ..common import Controller
+from ..decorators import argument, command, option
 from ..utils import assert_context, confirm, echo, prompt
-from ..decorators import command, argument, option
 
 
 class ConfigController(Controller):

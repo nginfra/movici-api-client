@@ -3,8 +3,8 @@ import uuid
 import pytest
 
 from movici_api_client.cli.common import OPTIONS_COMMAND, has_options
-from movici_api_client.cli.utils import iter_commands, resolve_question_flag, validate_uuid
 from movici_api_client.cli.decorators import command
+from movici_api_client.cli.utils import iter_commands, resolve_question_flag, validate_uuid
 
 
 def test_command():

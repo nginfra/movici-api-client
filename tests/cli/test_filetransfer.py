@@ -1,6 +1,8 @@
 import json
 from unittest.mock import patch
+
 import pytest
+
 import movici_api_client.cli.filetransfer
 from movici_api_client.cli.filetransfer import MultipleDatasetUploader
 
@@ -57,6 +59,7 @@ class TestMultipleDatasetUploader:
             assert uploader.maybe_overwrite_data(flag, "some_name") == expected
 
     prompt_sentinel = object()
+
     @pytest.mark.parametrize(
         "filename, data, inspect, expected_value",
         [
@@ -65,19 +68,16 @@ class TestMultipleDatasetUploader:
             ("file.tiff", None, False, "height_map"),
             ("file.json", None, False, prompt_sentinel),
             ("file.json", {}, True, prompt_sentinel),
-            ("file.json", {"type": "some_type"}, True, "some_type"), 
-            ("file.other", None, True, prompt_sentinel), 
-            ("file.other", None, False, prompt_sentinel), 
+            ("file.json", {"type": "some_type"}, True, "some_type"),
+            ("file.other", None, True, prompt_sentinel),
+            ("file.other", None, False, prompt_sentinel),
         ],
     )
     def test_infer_dataset_type(
         self, filename, data, inspect, expected_value, uploader, add_dataset
     ):
-        uploader.all_dataset_types = ['a', 'b']
+        uploader.all_dataset_types = ["a", "b"]
         file = add_dataset(filename, data)
         with patch.object(movici_api_client.cli.filetransfer, "prompt_choices") as prompt:
             prompt.return_value = self.prompt_sentinel
             assert uploader.infer_dataset_type(file, inspect) == expected_value
-        
-
-    
