@@ -1,0 +1,119 @@
+import pathlib
+from movici_api_client.api.client import Client
+from movici_api_client.api.requests import (
+    CreateDataset,
+    DeleteDataset,
+    GetDatasetTypes,
+    GetDatasets,
+    GetSingleDataset,
+)
+from movici_api_client.cli.dependencies import get
+from movici_api_client.cli.exceptions import NotYetImplemented
+from movici_api_client.cli.filetransfer import upload_new_dataset
+from movici_api_client.cli.ui import format_object
+from movici_api_client.cli.utils import DirPath, prompt, confirm
+
+from ..common import Controller
+from ..decorators import (
+    argument,
+    command,
+    format_output,
+    option,
+    authenticated,
+    valid_project_uuid,
+)
+from ..utils import (
+    FilePath,
+    assert_resource_uuid,
+    prompt_choices,
+    validate_uuid,
+)
+
+
+class DatasetCrontroller(Controller):
+    name = "dataset"
+    decorators = (authenticated, valid_project_uuid)
+
+    @command(name="datasets")
+    @format_output(
+        fields=(
+            "uuid",
+            "name",
+            "display_name",
+            "type",
+            "has_data",
+        )
+    )
+    def list(self, project_uuid):
+        client = get(Client)
+        return client.request(GetDatasets(project_uuid))
+
+    @command
+    @argument("name_or_uuid")
+    @format_output(
+        fields=(
+            "uuid",
+            "name",
+            "display_name",
+            "type",
+            "format",
+            "has_data",
+        )
+    )
+    def get(self, project_uuid, name_or_uuid):
+        client = get(Client)
+        uuid = get_dataset_uuid(name_or_uuid, project_uuid, client=client)
+
+        return client.request(GetSingleDataset(uuid))
+
+    @command
+    @argument("name")
+    @option("--display_name")
+    @option("dataset_type", "--type")
+    @format_output
+    def create(self, project_uuid, name, display_name, dataset_type):
+        client = get(Client)
+        if display_name is None:
+            display_name = prompt("Display name", default=name)
+        if dataset_type is None:
+            all_types = client.request(GetDatasetTypes())
+            dataset_type = prompt_choices("Type", sorted([tp["name"] for tp in all_types]))
+        return client.request(
+            CreateDataset(project_uuid, name=name, type=dataset_type, display_name=display_name)
+        )
+
+    @command
+    def update(self, project_uuid, dataset):
+        raise NotYetImplemented()
+
+    @command
+    @argument("name_or_uuid")
+    def delete(self, project_uuid, name_or_uuid):
+        client = get(Client)
+        uuid = get_dataset_uuid(name_or_uuid, project_uuid, client=client)
+
+        confirm(f"Are you sure you wish to delete dataset '{name_or_uuid}' and all its data?")
+        return client.request(DeleteDataset(uuid))
+
+    @command
+    @argument("name_or_uuid", default="")
+    @option("-f", "--file", type=FilePath(), required=True)
+    def upload(self, project_uuid, name_or_uuid, file: pathlib.Path):
+        name_or_uuid = name_or_uuid or file.stem
+        client = get(Client)
+        uuid = get_dataset_uuid(name_or_uuid, project_uuid, client=client)
+        return upload_new_dataset(uuid, file)
+
+    @command(name="datasets", group="upload")
+    @option("-d", "--directory", type=DirPath(), required=True)
+    def upload_multiple(self, project_uuid, project, directory):
+        raise NotYetImplemented()
+
+
+def get_dataset_uuid(name_or_uuid, project_uuid, client=None):
+    client = client or get(Client)
+    return (
+        name_or_uuid
+        if validate_uuid(name_or_uuid)
+        else assert_resource_uuid(name_or_uuid, GetDatasets(project_uuid), "dataset")
+    )
