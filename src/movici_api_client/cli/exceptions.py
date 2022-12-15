@@ -62,3 +62,9 @@ class NoActiveProject(MoviciCLIError):
 
 class NotYetImplemented(MoviciCLIError):
     template = "This command is not implemented yet"
+
+
+@dataclasses.dataclass
+class InvalidUsage(MoviciCLIError):
+    msg: str
+    template = "Invalid usage: {msg}"

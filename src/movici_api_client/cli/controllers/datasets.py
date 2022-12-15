@@ -1,33 +1,61 @@
+import functools
 import pathlib
+import typing as t
+
 from movici_api_client.api.client import Client
 from movici_api_client.api.requests import (
     CreateDataset,
     DeleteDataset,
-    GetDatasetTypes,
+    DeleteDatasetData,
     GetDatasets,
+    GetDatasetTypes,
     GetSingleDataset,
 )
 from movici_api_client.cli.dependencies import get
-from movici_api_client.cli.exceptions import NotYetImplemented
-from movici_api_client.cli.filetransfer import upload_new_dataset
-from movici_api_client.cli.ui import format_object
-from movici_api_client.cli.utils import DirPath, prompt, confirm
+from movici_api_client.cli.exceptions import InvalidUsage, NotYetImplemented
+from movici_api_client.cli.filetransfer import upload_multiple, upload_new_dataset
+from movici_api_client.cli.utils import DirPath, confirm, echo, prompt
 
 from ..common import Controller
 from ..decorators import (
     argument,
+    authenticated,
     command,
     format_output,
     option,
-    authenticated,
     valid_project_uuid,
 )
 from ..utils import (
     FilePath,
     assert_resource_uuid,
     prompt_choices,
+    resolve_question_flag,
     validate_uuid,
 )
+
+
+def upload_data_options(func):
+    return functools.reduce(
+        lambda f, decorator: decorator(f),
+        [
+            option("-o", "--overwrite", is_flag=True, help="Always overwrite existing data"),
+            option("-c", "--create", is_flag=True, help="Always create new datasets"),
+            option(
+                "-y",
+                "--yes",
+                is_flag=True,
+                help="Answer yes to all questions, equivalent to -o -c",
+            ),
+            option("-n", "--no", is_flag=True, help="Answer no to all questions"),
+            option(
+                "-i",
+                "--inspect",
+                is_flag=True,
+                help="Try to read files to determine their dataset type, less performant",
+            ),
+        ],
+        func,
+    )
 
 
 class DatasetCrontroller(Controller):
@@ -88,6 +116,7 @@ class DatasetCrontroller(Controller):
 
     @command
     @argument("name_or_uuid")
+    @format_output
     def delete(self, project_uuid, name_or_uuid):
         client = get(Client)
         uuid = get_dataset_uuid(name_or_uuid, project_uuid, client=client)
@@ -96,9 +125,22 @@ class DatasetCrontroller(Controller):
         return client.request(DeleteDataset(uuid))
 
     @command
+    @argument("name_or_uuid")
+    @format_output
+    def clear(self, project_uuid, name_or_uuid):
+        client = get(Client)
+        uuid = get_dataset_uuid(name_or_uuid, project_uuid, client=client)
+
+        confirm(f"Are you sure you wish to clear dataset '{name_or_uuid}' of all data?")
+        return client.request(DeleteDatasetData(uuid))
+
+    @command
     @argument("name_or_uuid", default="")
     @option("-f", "--file", type=FilePath(), required=True)
-    def upload(self, project_uuid, name_or_uuid, file: pathlib.Path):
+    @upload_data_options
+    def upload(
+        self, project_uuid, name_or_uuid, file: pathlib.Path, overwrite, create, yes, no, inspect
+    ):
         name_or_uuid = name_or_uuid or file.stem
         client = get(Client)
         uuid = get_dataset_uuid(name_or_uuid, project_uuid, client=client)
@@ -106,8 +148,20 @@ class DatasetCrontroller(Controller):
 
     @command(name="datasets", group="upload")
     @option("-d", "--directory", type=DirPath(), required=True)
-    def upload_multiple(self, project_uuid, project, directory):
-        raise NotYetImplemented()
+    @upload_data_options
+    def upload_multiple(self, project_uuid, directory, overwrite, create, yes, no, inspect):
+        if yes and no:
+            raise InvalidUsage("cannot combine --force with --never")
+
+        upload_multiple(
+            directory,
+            project_uuid,
+            extensions={".json", ".msgpack", ".csv", ".nc", ".tiff", ".tif", ".geotif", ".geotif"},
+            overwrite=resolve_question_flag(overwrite, yes, no),
+            create_new=resolve_question_flag(create, yes, no),
+            inspect_files=inspect,
+        )
+        echo("Success!")
 
 
 def get_dataset_uuid(name_or_uuid, project_uuid, client=None):

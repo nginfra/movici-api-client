@@ -10,12 +10,12 @@ class LoginController:
     def __init__(self, client: Client, context: Context) -> None:
         self.client = client
         self.context = context
-        self.success = True  # assume succes until failure
+        self.success = True
 
     def login(self, ask_username):
         username = self.context.username
-        ask_username = ask_username or username is None 
-        
+        ask_username = ask_username or username is None
+
         while True:
             if ask_username:
                 username = prompt("Username")
@@ -24,13 +24,9 @@ class LoginController:
                 self.handle_success(resp, username)
                 break
 
-    def get_existing_username(self, ask_username):
-        if not ask_username:
-            return self.context.username
-            
     def try_login(self, username):
         password = prompt("Password", hide_input=True)
-        self.success = True
+        self.success = True  # Assume success unless it's reset by self.fail
         return self.client.request(Login(username, password), on_error=self.fail)
 
     def fail(self, *_, **__):

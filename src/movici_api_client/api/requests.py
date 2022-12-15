@@ -162,6 +162,17 @@ class ModifiyDatasetData(AddDatasetData):
         return {**super().make_request(), "method": "PUT"}
 
 
+@dataclasses.dataclass
+class DeleteDatasetData(Request):
+    uuid: str
+
+    def make_request(self):
+        return {
+            "method": "DELETE",
+            "url": urljoin(APIBase.DATA_ENGINE, "datasets", self.uuid, "data"),
+        }
+
+
 @unwrap_envelope("dataset_types")
 class GetDatasetTypes(Request):
     @simple_request

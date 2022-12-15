@@ -3,7 +3,7 @@ import uuid
 import pytest
 
 from movici_api_client.cli.common import OPTIONS_COMMAND, has_options
-from movici_api_client.cli.utils import iter_commands, validate_uuid
+from movici_api_client.cli.utils import iter_commands, resolve_question_flag, validate_uuid
 from movici_api_client.cli.decorators import command
 
 
@@ -64,3 +64,18 @@ def test_validate_uuid(entry):
 
 def test_invalid_uuid():
     assert not validate_uuid("invalid")
+
+
+@pytest.mark.parametrize(
+    "flag, default_yes, default_no, expected",
+    [
+        (False, False, False, None),
+        (True, False, False, True),
+        (False, True, False, True),
+        (True, True, False, True),
+        (False, False, True, False),
+        (True, False, True, True),
+    ],
+)
+def test_set_question_flag(flag, default_yes, default_no, expected):
+    assert resolve_question_flag(flag, default_yes, default_no) == expected
