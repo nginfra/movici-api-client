@@ -24,15 +24,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-
       - name: Install
         run: |
-          pip install .
+          pip install poetry
+          poetry install
 
       - name: Run tests
         run: |
-          cd tests
-          pytest .
+          make unittest
 
   deploy:
     # We only want to run the deploy job if we've just created a version tag. in `on.push.tags`
