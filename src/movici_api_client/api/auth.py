@@ -1,6 +1,7 @@
+import typing as t
+
 from .common import Auth, BaseApi
 from .requests import Login
-import typing as t
 
 
 class MoviciTokenAuth(Auth):

@@ -1,10 +1,12 @@
+from unittest.mock import call, patch
+
+import pytest
+
 from movici_api_client.api.requests import CheckAuthToken
+from movici_api_client.cli import decorators
 from movici_api_client.cli.decorators import authenticated, catch_exceptions
 from movici_api_client.cli.exceptions import MoviciCLIError, Unauthenticated
 from movici_api_client.cli.testing import FakeClient
-from movici_api_client.cli import decorators
-import pytest
-from unittest.mock import patch, call
 
 
 class TestCatchExceptions:

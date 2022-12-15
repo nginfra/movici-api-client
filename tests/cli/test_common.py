@@ -1,10 +1,6 @@
-from movici_api_client.cli.common import (
-    get_options,
-    set_options,
-    has_options,
-    remove_options,
-)
 import pytest
+
+from movici_api_client.cli.common import get_options, has_options, remove_options, set_options
 
 
 @pytest.fixture

@@ -1,8 +1,9 @@
 import functools
+
 import click
 
-from movici_api_client.cli.utils import iter_commands
 from movici_api_client.cli.decorators import catch_exceptions
+from movici_api_client.cli.utils import iter_commands
 
 from .common import OPTIONS_COMMAND, Controller, get_options
 

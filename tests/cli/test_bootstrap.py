@@ -2,8 +2,8 @@ import click
 import click.testing
 import pytest
 
-from movici_api_client.cli.common import Controller
 from movici_api_client.cli.bootstrap import create_click_command, register_controller
+from movici_api_client.cli.common import Controller
 from movici_api_client.cli.decorators import argument, command
 
 

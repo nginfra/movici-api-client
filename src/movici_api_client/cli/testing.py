@@ -1,6 +1,6 @@
-from collections import deque
 import dataclasses
 import unittest.mock
+from collections import deque
 
 
 class FakeClient:

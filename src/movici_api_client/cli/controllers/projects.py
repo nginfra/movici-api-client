@@ -5,13 +5,13 @@ from movici_api_client.api.requests import (
     GetProjects,
     GetSingleProject,
 )
+
+from ..common import Controller
+from ..decorators import argument, authenticated, command, format_output, option
 from ..dependencies import get
 from ..exceptions import NotYetImplemented
 from ..ui import format_object
-
-from ..common import Controller
-from ..decorators import argument, authenticated, command, option, format_output
-from ..utils import DirPath, assert_project_uuid, echo, validate_uuid, prompt, confirm
+from ..utils import DirPath, assert_project_uuid, confirm, echo, prompt, validate_uuid
 
 
 class ProjectController(Controller):

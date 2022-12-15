@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import functools
-from urllib.parse import urljoin as urljoin_
-from functools import reduce
 import typing as t
+from functools import reduce
+from urllib.parse import urljoin as urljoin_
+
 from httpx import Response
 
 

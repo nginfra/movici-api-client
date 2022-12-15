@@ -1,3 +1,4 @@
+import click.testing
 import pytest
 
 from movici_api_client.cli.bootstrap import cli_factory
@@ -5,7 +6,6 @@ from movici_api_client.cli.config import read_config
 from movici_api_client.cli.controllers.config import ConfigController
 from movici_api_client.cli.controllers.projects import ProjectController
 from movici_api_client.cli.main import login, main
-import click.testing
 
 
 @pytest.fixture

@@ -1,10 +1,12 @@
 import json
+import os
+
 import pytest
+
 from movici_api_client.api import Client
 from movici_api_client.cli import dependencies
 from movici_api_client.cli.config import CONFIG_LOCATION_ENV, get_config
 from movici_api_client.cli.testing import FakeClient
-import os
 
 
 @pytest.fixture(autouse=True)

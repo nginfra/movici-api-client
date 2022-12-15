@@ -1,6 +1,8 @@
 import json
 from unittest.mock import patch
+
 import pytest
+
 import movici_api_client.cli.filetransfer
 from movici_api_client.cli.filetransfer import MultipleDatasetUploader
 

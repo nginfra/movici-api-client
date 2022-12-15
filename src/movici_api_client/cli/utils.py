@@ -12,11 +12,7 @@ from movici_api_client.api.client import Client
 from movici_api_client.api.common import Request
 from movici_api_client.api.requests import GetProjects
 from movici_api_client.cli import dependencies
-from movici_api_client.cli.common import (
-    OPTIONS_COMMAND,
-    Controller,
-    get_options,
-)
+from movici_api_client.cli.common import OPTIONS_COMMAND, Controller, get_options
 from movici_api_client.cli.config import Config
 from movici_api_client.cli.exceptions import (
     InvalidResource,

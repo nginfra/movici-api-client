@@ -1,11 +1,12 @@
 from json import JSONDecodeError
 
-from movici_api_client.api import Client, Response, MoviciTokenAuth
+from movici_api_client.api import Client, MoviciTokenAuth, Response
 from movici_api_client.cli.exceptions import InvalidResource
 
 from . import dependencies
 from .config import Config, get_config, write_config
 from .controllers.login import LoginController
+from .decorators import argument, authenticated, command, option
 from .utils import (
     Abort,
     assert_context,
@@ -14,7 +15,6 @@ from .utils import (
     get_project_uuids,
     prompt_choices,
 )
-from .decorators import authenticated, option, command, argument
 
 
 @option("project_override", "-p", "--project", default="")
