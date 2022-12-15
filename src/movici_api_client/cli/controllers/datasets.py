@@ -10,6 +10,7 @@ from movici_api_client.api.requests import (
     GetDatasets,
     GetDatasetTypes,
     GetSingleDataset,
+    UpdateDataset,
 )
 from movici_api_client.cli.dependencies import get
 from movici_api_client.cli.exceptions import InvalidUsage, NotYetImplemented
@@ -111,8 +112,15 @@ class DatasetCrontroller(Controller):
         )
 
     @command
-    def update(self, project_uuid, dataset):
-        raise NotYetImplemented()
+    @argument("name_or_uuid")
+    @option("--name", help="New Dataset name")
+    @option("--display_name", help="New display name")
+    @option("--type", help="New dataset type", default=None)
+    @format_output
+    def update(self, project_uuid, name_or_uuid, name, display_name, type):
+        client = get(Client)
+        uuid = get_dataset_uuid(name_or_uuid, project_uuid, client=client)
+        return client.request(UpdateDataset(uuid, name=name, type=type, display_name=display_name))
 
     @command
     @argument("name_or_uuid")

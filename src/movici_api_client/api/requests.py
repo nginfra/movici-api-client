@@ -131,6 +131,25 @@ class CreateDataset(Request):
 
 
 @dataclasses.dataclass
+class UpdateDataset(Request):
+    uuid: str
+    name: t.Optional[str] = None
+    type: t.Optional[str] = None
+    display_name: t.Optional[str] = None
+
+    def make_request(self):
+        return {
+            "method": "PUT",
+            "url": urljoin(APIBase.DATA_ENGINE, "datasets", self.uuid),
+            "json": {
+                k: v
+                for k, v in pick(self, ("name", "type", "display_name")).items()
+                if v is not None
+            },
+        }
+
+
+@dataclasses.dataclass
 class DeleteDataset(Request):
     uuid: str
 
