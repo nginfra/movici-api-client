@@ -199,6 +199,8 @@ class DatasetCrontroller(Controller):
     @argument("name_or_uuid")
     @download_data_options
     def download(self, project_uuid, name_or_uuid, directory, overwrite, no_overwrite):
+        if overwrite and no_overwrite:
+            raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
         client = get(Client)
         name, uuid = get_dataset_name_and_uuid(name_or_uuid, project_uuid)
         download_dataset_data(
@@ -208,6 +210,8 @@ class DatasetCrontroller(Controller):
             directory=directory,
             overwrite=resolve_question_flag(False, default_yes=overwrite, default_no=no_overwrite),
         )
+        echo("Success!")
+
 
     @command(name="datasets", group="download")
     @download_data_options
@@ -219,6 +223,8 @@ class DatasetCrontroller(Controller):
             directory=directory,
             overwrite=resolve_question_flag(False, default_yes=overwrite, default_no=no_overwrite),
         )
+        echo("Success!")
+
 
 
 def get_dataset_uuid(name_or_uuid, project_uuid, client=None):
