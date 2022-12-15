@@ -19,7 +19,8 @@ jobs:
 
       - name: Build and install
         run: |
-          pip install -r requirements-dev.txt
+          pip install poetry
+          poetry install
 
       - name: Run linters
         run: |
@@ -37,7 +38,8 @@ jobs:
 
       - name: Install
         run: |
-          pip install .
+          pip install poetry
+          poetry install
 
       - name: Run tests
         run: |
