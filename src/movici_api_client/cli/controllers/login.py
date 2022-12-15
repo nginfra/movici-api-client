@@ -6,6 +6,8 @@ from ..utils import echo, prompt
 
 # While this is in the controllers package, it is not a subclass of Controller.
 # it must be instantiate inside a command
+
+
 class LoginController:
     def __init__(self, client: Client, context: Context) -> None:
         self.client = client

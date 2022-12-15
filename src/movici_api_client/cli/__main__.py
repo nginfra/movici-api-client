@@ -6,12 +6,12 @@ from movici_api_client.cli.main import activate_project, main, login
 from movici_api_client.cli.controllers.projects import ProjectController
 
 cli_factory(
-        main=main,
-        commands=[login, activate_project],
-        controller_types=[
-            ProjectController,
-            DatasetCrontroller,
-            ConfigController,
-            DatasetTypeController
-        ]
-    )()
+    main=main,
+    commands=[login, activate_project],
+    controller_types=[
+        ProjectController,
+        DatasetCrontroller,
+        ConfigController,
+        DatasetTypeController,
+    ],
+)()

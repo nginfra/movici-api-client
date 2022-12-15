@@ -1,7 +1,7 @@
-import typing as t
 from json import JSONDecodeError
 
 from movici_api_client.api import Client, Response, MoviciTokenAuth
+from movici_api_client.cli.exceptions import InvalidResource
 
 from . import dependencies
 from .config import Config, get_config, write_config
@@ -68,7 +68,7 @@ def activate_project(project):
     if not project:
         project = prompt_choices("Choose a project", sorted(projects_dict))
     if project not in projects_dict:
-        raise InvalidProject(project)
+        raise InvalidResource("project", project)
 
     context.project = project
     write_config(config)

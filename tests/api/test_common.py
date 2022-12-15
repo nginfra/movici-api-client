@@ -19,5 +19,3 @@ def session():
 )
 def test_urljoin(parts, expected):
     assert urljoin(*parts) == expected
-
-

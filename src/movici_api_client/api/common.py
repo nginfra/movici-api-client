@@ -21,7 +21,6 @@ class BaseApi:
 T = t.TypeVar("T")
 
 
-
 class BaseRequest(t.Generic[T]):
     auth = False
 
@@ -58,11 +57,13 @@ def unwrap_envelope(envelope):
     def decorator(cls: Request):
         def make_response(self, resp: Response):
             return resp.json()[envelope]
-        
-        cls.make_response=make_response
+
+        cls.make_response = make_response
         return cls
+
     return decorator
-    
+
+
 def urljoin(*parts):
     return reduce(urljoin_, (str(part) + "/" for part in parts))
 

@@ -2,7 +2,7 @@ unittest:
 	pytest -v tests/
 
 flake8:
-	flake8
+	flake8 src/ tests/
 
 black-check:
 	black --check .
@@ -24,10 +24,3 @@ bump-version:
 	bumpversion  --config-file .bumpversion.app $(level)
 	@NEW_VERSION=$$(tail -1 VERSION);\
 	echo New version: $$NEW_VERSION
-
-.PHONY: docs
-docs:
-	cd docs/ && $(MAKE) html SPHINXOPTS="-W --keep-going"
-
-doctest:
-	cd docs/ && $(MAKE) doctest

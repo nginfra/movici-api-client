@@ -1,7 +1,6 @@
 import contextlib
 import json
 import pathlib
-import typing as t
 
 from tqdm.auto import tqdm
 from tqdm.utils import CallbackIOWrapper
@@ -71,7 +70,6 @@ class MultipleDatasetUploader:
         all_datasets = client.request(GetDatasets(self.project_uuid))
         dataset_with_data = set(d["name"] for d in all_datasets if d["has_data"])
         dataset_uuids = {d["name"]: d["uuid"] for d in all_datasets}
-        all_types = None
 
         for file in tqdm(list(self.iter_dataset_files()), desc="Processing files"):
             name = file.stem

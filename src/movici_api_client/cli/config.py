@@ -30,7 +30,7 @@ def get_config(file: pathlib.Path = None):
         raise InvalidConfig("invalid json", file)
     except (KeyError, TypeError):
         raise InvalidConfig("invalid values", file)
-    except:
+    except Exception:
         raise InvalidConfig("unknown cause", file)
 
 

@@ -27,5 +27,3 @@ class MoviciLoginAuth(MoviciTokenAuth):
     def login(self, api: BaseApi):
         resp = api.request(Login(self.username, self.password))
         self.auth_token = resp["session"]
-
-    

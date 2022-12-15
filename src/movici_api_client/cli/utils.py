@@ -123,12 +123,12 @@ def resolve_question_flag(flag: bool, default_yes: bool, default_no: bool) -> t.
     """Returns the value for a question-like flag. These flags can be set to either True/False or
     None in which case the user should be asked. If the flag is not specifically set to True and no
     default is given, flag is set to None. A positive flag value has precedence over a default no.
-    Behaviour for when both default_yes and default_no are True is undefined and should be 
+    Behaviour for when both default_yes and default_no are True is undefined and should be
     discouraged
     """
     if flag:
         return flag
-    
+
     default = default_yes or not default_no
     if not default_yes and not default_no:
         default = None
