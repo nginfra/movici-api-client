@@ -23,12 +23,9 @@ from .utils import confirm, echo, prompt_choices
 
 @contextlib.contextmanager
 def monitored_file(file: pathlib.Path):
-    with (
-        open(file, "rb") as fobj,
-        tqdm(
-            total=file.stat().st_size, unit="B", unit_scale=True, unit_divisor=1024, desc=file.name
-        ) as t,
-    ):
+    with open(file, "rb") as fobj, tqdm(
+        total=file.stat().st_size, unit="B", unit_scale=True, unit_divisor=1024, desc=file.name
+    ) as t:
         yield CallbackIOWrapper(t.update, fobj, "read")
         t.reset()
 
