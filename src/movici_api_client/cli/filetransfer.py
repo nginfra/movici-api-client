@@ -7,13 +7,16 @@ from tqdm.auto import tqdm
 from tqdm.utils import CallbackIOWrapper
 
 from movici_api_client.api import Client
+from movici_api_client.api.common import Request
 from movici_api_client.api.requests import (
     AddDatasetData,
     CreateDataset,
+    GetDatasetData,
     GetDatasetTypes,
     GetDatasets,
     ModifiyDatasetData,
 )
+from movici_api_client.cli.exceptions import InvalidFile
 
 from . import dependencies
 from .utils import confirm, echo, prompt_choices
@@ -105,20 +108,18 @@ class MultipleDatasetUploader:
 
     @staticmethod
     def maybe_create_new_dataset(create_new, name):
-        do_create = create_new
-        if create_new is None:
-            do_create = confirm(
-                f"Dataset {name} does not exist, do you wish to create this dataset?"
-            )
+        do_create = maybe_set_flag(
+            create_new, f"Dataset {name} does not exist, do you wish to create this dataset?"
+        )
         if not do_create:
             echo(f"Cowardly refusing to create new dataset {name}")
         return do_create
 
     @staticmethod
     def maybe_overwrite_data(overwrite, name):
-        do_overwrite = overwrite
-        if overwrite is None:
-            do_overwrite = confirm(f"Dataset {name} already has data, do you wish to overwrite?")
+        do_overwrite = maybe_set_flag(
+            overwrite, f"Dataset {name} already has data, do you wish to overwrite?"
+        )
         if not do_overwrite:
             echo(f"Cowardly refusing to overwrite data for '{name}'")
         return do_overwrite
@@ -143,3 +144,65 @@ class MultipleDatasetUploader:
         return prompt_choices(
             f"Please specify the type for dataset '{file.name}'", self.all_dataset_types
         )
+
+
+def maybe_set_flag(flag, confirm_message):
+    result = flag
+    if flag is None:
+        result = confirm(confirm_message)
+    return result
+
+
+def download_dataset_data(
+    client: Client, name: str, uuid: str, directory: pathlib.Path, overwrite=None
+):
+    target = directory.joinpath(name)
+    download_as_file(client, GetDatasetData(uuid), file=target, overwrite=overwrite)
+
+
+def download_multiple_dataset_data(
+    client: Client, project_uuid: str, directory: pathlib.Path, overwrite=None
+):
+    all_datasets = client.request(GetDatasets(project_uuid))
+    for dataset in tqdm(all_datasets, desc="Downloading files"):
+        name, uuid = dataset["name"], dataset["uuid"]
+        download_dataset_data(
+            client, name=name, uuid=uuid, directory=directory, overwrite=overwrite
+        )
+
+
+def download_as_file(
+    client: Client, request: Request, file: pathlib.Path, infer_extension=True, overwrite=None
+):
+    with client.stream(request) as response:
+        if infer_extension:
+            file = file.with_suffix(EXTENSIONS.get(response.headers.get("content-type"), ".dat"))
+        if file.exists():
+            overwrite = maybe_set_flag(overwrite, "File already existing, overwrite?")
+            if not file.is_file():
+                raise InvalidFile(file)
+            if not overwrite:
+                echo(f"Cowardly refusing to overwrite existing file {file.name}")
+                return
+        with tqdm.wrapattr(
+            open(file, "wb"),
+            "write",
+            miniters=1,
+            desc=file.name,
+            total=int(response.headers.get("content-length", 0)),
+        ) as fout:
+            for chunk in response.iter_bytes(chunk_size=4096):
+                fout.write(chunk)
+
+
+EXTENSIONS = {
+    "application/json": ".json",
+    "application/msgpack": ".msgpack",
+    "application/x-msgpack": ".msgpack",
+    "application/netcdf": ".nc",
+    "application/x-netcdf": ".nc",
+    "text/csv": ".csv",
+    "text/html": ".html",
+    "text/plain": ".txt",
+    "image/tiff": ".tif",
+}

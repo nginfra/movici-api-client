@@ -158,6 +158,15 @@ class DeleteDataset(Request):
 
 
 @dataclasses.dataclass
+class GetDatasetData(Request):
+    uuid: str
+
+    @simple_request
+    def make_request(self):
+        return urljoin(APIBase.DATA_ENGINE, "datasets", self.uuid, "data")
+
+
+@dataclasses.dataclass
 class AddDatasetData(Request):
     uuid: str
     file: t.Union[str, pathlib.Path, io.BufferedIOBase]
