@@ -6,30 +6,34 @@ from movici_api_client.api import Client, Response, MoviciTokenAuth
 from . import dependencies
 from .config import Config, get_config, write_config
 from .controllers.login import LoginController
-from .exceptions import InvalidProject
 from .utils import (
     Abort,
-    argument,
     assert_context,
     assert_current_context,
-    command,
     echo,
     get_project_uuids,
-    option,
     prompt_choices,
 )
+from .decorators import authenticated, option, command, argument
 
 
-def main():
+@option("project_override", "-p", "--project", default="")
+def main(project_override):
     config = get_config()
     dependencies.set(config)
-    if context := config.current_context:
-        client = Client(
-            base_url=context.url,
-            auth=MoviciTokenAuth(auth_token=context.auth_token),
-            on_error=handle_http_error,
-        )
-        dependencies.set(client)
+
+    if not (context := config.current_context):
+        return
+
+    client = Client(
+        base_url=context.url,
+        auth=MoviciTokenAuth(auth_token=context.auth_token),
+        on_error=handle_http_error,
+    )
+    dependencies.set(client)
+
+    if project_override:
+        context.project = project_override
 
 
 def handle_http_error(resp: Response):
@@ -55,6 +59,7 @@ def login(ask_username):
 
 @command(name="activate-project")
 @argument("project", default="")
+@authenticated
 def activate_project(project):
     config = dependencies.get(Config)
     context = assert_context(config)

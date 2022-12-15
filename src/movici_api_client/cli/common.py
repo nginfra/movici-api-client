@@ -31,3 +31,4 @@ def remove_options(obj, key: str):
 class Controller:
     name: str
     reverse: bool = True
+    decorators: t.Iterable[callable] = ()

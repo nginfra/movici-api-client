@@ -4,7 +4,7 @@ import pytest
 
 from movici_api_client.cli.common import Controller
 from movici_api_client.cli.bootstrap import create_click_command, register_controller
-from movici_api_client.cli.utils import argument, command
+from movici_api_client.cli.decorators import argument, command
 
 
 class MyController(Controller):
@@ -24,6 +24,24 @@ def test_register_controller():
     register_controller(group, MyController())
     assert "single" in group.commands["get"].commands
     assert "multiple" in group.commands["list"].commands
+
+
+def test_register_controller_with_explicit_group():
+    class MyController(Controller):
+        name: str = "single"
+
+        @command
+        def get(self):
+            click.echo("get")
+
+        @command(name="multiple", group="get")
+        def get_multiple(self):
+            click.echo("list")
+
+    group = click.Group("main")
+    register_controller(group, MyController())
+    assert "single" in group.commands["get"].commands
+    assert "multiple" in group.commands["get"].commands
 
 
 @pytest.mark.parametrize(

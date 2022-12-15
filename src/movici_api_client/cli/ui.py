@@ -2,7 +2,6 @@ import dataclasses
 import typing as t
 
 import tabulate
-from movici_api_client.api.common import pick
 
 
 def format_object(obj, fields: t.Sequence[str], header=None):
@@ -45,4 +44,6 @@ def pick(obj, attrs: t.List[str], default=None):
 
 
 def format_table(objects, keys, default=""):
-    return tabulate.tabulate((pick(o, keys, default) for o in objects), headers="keys")
+    if keys is not None:
+        objects = (pick(o, keys, default) for o in objects)
+    return tabulate.tabulate(objects, headers="keys")

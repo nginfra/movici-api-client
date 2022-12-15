@@ -1,14 +1,16 @@
+import functools
 import click
 
-from movici_api_client.cli.utils import catch_exceptions, iter_commands
+from movici_api_client.cli.utils import iter_commands
+from movici_api_client.cli.decorators import catch_exceptions
 
 from .common import OPTIONS_COMMAND, Controller, get_options
 
 
-def create_click_command(func, opts=None):
+def create_click_command(func, opts=None, factory=click.command):
     if opts is None:
         opts = get_options(func, OPTIONS_COMMAND)
-    command = click.command(func)
+    command = factory(func)
     for args, kwargs in opts.get("arguments") or []:
         command = click.argument(*args, **kwargs)(command)
     for args, kwargs in opts.get("options") or []:
@@ -22,8 +24,12 @@ def register_controller(group: click.Group, controller: Controller):
 
     for name, func in iter_commands(controller):
         command_name = get_options(func, OPTIONS_COMMAND).get("name") or name
+        func = functools.reduce(lambda f, dec: dec(f), controller.decorators, func)
         register_command_in_subgroup(
-            group, subgroup_name=controller.name, command=func, command_name=command_name
+            group,
+            subgroup_name=controller.name,
+            command=func,
+            command_name=command_name,
         )
 
 
@@ -31,6 +37,8 @@ def register_controller_reversed(group: click.Group, controller: Controller):
     for group_name, func in iter_commands(controller):
         opts = get_options(func, OPTIONS_COMMAND)
         command_name = opts.get("name") or controller.name
+        func = functools.reduce(lambda f, dec: dec(f), controller.decorators, func)
+
         register_command_in_subgroup(group, group_name, func, command_name)
 
 
@@ -58,7 +66,7 @@ def register_command(group: click.Group, command, name=None):
 
 
 def cli_factory(main, commands=None, controller_types=None):
-    main = click.group(catch_exceptions(main))
+    main = create_click_command(catch_exceptions(main), factory=click.group)
     for cmd in commands or []:
         register_command(main, cmd)
 

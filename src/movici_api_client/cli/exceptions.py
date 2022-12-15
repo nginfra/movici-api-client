@@ -36,18 +36,29 @@ class NoSuchContext(MoviciCLIError):
     context: str
     template = "Context {context} not found"
 
+
 class NoContextAvailable(MoviciCLIError):
-    template = "There are no contexts available. Please create a context using `movici config create`"
+    template = (
+        "There are no contexts available. Please create a context using `movici config create`"
+    )
+
 
 @dataclasses.dataclass
-class InvalidProject(MoviciCLIError):
-    project: str
-    template = "Invalid project: {project}"
+class InvalidResource(MoviciCLIError):
+    resource_type: str
+    name: str
+    template = "Invalid {resource_type}: {name}"
+
 
 @dataclasses.dataclass
 class InvalidActiveProject(MoviciCLIError):
     project: str
-    template =  "Project {project} is not a valid project"
+    template = "Project {project} is not a valid project"
+
 
 class NoActiveProject(MoviciCLIError):
     template = "No active project"
+
+
+class NotYetImplemented(MoviciCLIError):
+    template = "This command is not implemented yet"

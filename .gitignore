@@ -41,3 +41,5 @@ ae_project
 
 #sphinx
 /docs/build
+
+/data/

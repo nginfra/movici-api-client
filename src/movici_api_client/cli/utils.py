@@ -1,38 +1,45 @@
 import functools
+import pathlib
 import typing as t
 import uuid
 
 import questionary
-import tabulate
-from click import Abort, confirm, echo, prompt
+from click import Abort
+from click import Path as PathType
+from click import confirm, echo, prompt
 
-from movici_api_client.api.client import Client, Response
-from movici_api_client.api.requests import CheckAuthToken, GetProjects
+from movici_api_client.api.client import Client
+from movici_api_client.api.common import Request
+from movici_api_client.api.requests import GetProjects
 from movici_api_client.cli import dependencies
 from movici_api_client.cli.common import (
     OPTIONS_COMMAND,
     Controller,
     get_options,
-    has_options,
-    set_options,
 )
 from movici_api_client.cli.config import Config
 from movici_api_client.cli.exceptions import (
-    InvalidProject,
+    InvalidResource,
     MoviciCLIError,
     NoActiveProject,
     NoConfig,
     NoCurrentContext,
-    Unauthenticated,
 )
-from movici_api_client.cli.ui import format_table
 
 # Show static analysis tools that we're using these imports with the intent to export, proxy and
 # possibly adapt them
+confirm = confirm
 prompt = prompt
 echo = echo
 Abort = Abort
 confirm = confirm
+
+DirPath = functools.partial(
+    PathType, file_okay=False, readable=True, exists=True, path_type=pathlib.Path
+)
+FilePath = functools.partial(
+    PathType, dir_okay=False, readable=True, exists=True, path_type=pathlib.Path
+)
 
 
 def assert_context(config: Config):
@@ -57,31 +64,26 @@ def assert_active_project(project=None):
     return assert_project_uuid(project)
 
 
-def assert_project_uuid(project: str):
-    projects_dict = get_project_uuids()
+def assert_resource_uuid(resource: str, request: Request, resource_type='resource'):
+    resources = get_resource_uuids(request)
     try:
-        return projects_dict[project]
+        return resources[resource]
     except KeyError:
-        raise InvalidProject(project)
+        raise InvalidResource(resource_type, resource)
+
+
+def assert_project_uuid(project: str):
+    return assert_resource_uuid(project, GetProjects(), resource_type="project")
+
+
+def get_resource_uuids(request: Request):
+    client = dependencies.get(Client)
+    all_resources = client.request(request)
+    return {p["name"]: p["uuid"] for p in all_resources}
 
 
 def get_project_uuids():
-    client = dependencies.get(Client)
-    all_projects = client.request(GetProjects())
-    return {p["name"]: p["uuid"] for p in all_projects["projects"]}
-
-
-def catch_exceptions(func):
-    """Decorator for catching (movici) exceptions, and handling them properly"""
-
-    @functools.wraps(func)
-    def _decorated(*args, **kwargs):
-        try:
-            func(*args, **kwargs)
-        except MoviciCLIError as e:
-            handle_movici_error(e)
-
-    return _decorated
+    return get_resource_uuids(GetProjects())
 
 
 def handle_movici_error(e: MoviciCLIError):
@@ -89,58 +91,12 @@ def handle_movici_error(e: MoviciCLIError):
     raise Abort()
 
 
-def authenticated(func):
-    def on_error(resp: Response):
-        if resp.status_code == 401:
-            raise Unauthenticated()
-
-    @functools.wraps(func)
-    def _decorated(*args, **kwargs):
-        client = dependencies.get(Client)
-        client.request(CheckAuthToken(), on_error=on_error)
-        func(*args, **kwargs)
-
-    return _decorated
-
-
-def command(func=None, /, name=None):
-    if func is None:
-        return functools.partial(command, name=name)
-    set_options(func, OPTIONS_COMMAND, {"name": name})
-    return func
-
-
-def argument(*args, **kwargs):
-    def wrapper(func):
-        if not has_options(func, OPTIONS_COMMAND):
-            set_options(func, OPTIONS_COMMAND, {})
-        opts = get_options(func, OPTIONS_COMMAND)
-
-        opts.setdefault("arguments", []).append((args, kwargs))
-
-        return func
-
-    return wrapper
-
-
-def option(*args, **kwargs):
-    def wrapper(func):
-        if not has_options(func, OPTIONS_COMMAND):
-            set_options(func, OPTIONS_COMMAND, {})
-        opts = get_options(func, OPTIONS_COMMAND)
-
-        opts.setdefault("options", []).append((args, kwargs))
-
-        return func
-
-    return wrapper
-
-
 def iter_commands(obj: Controller):
     for key in dir(obj):
         val = getattr(obj, key)
-        if has_options(val, OPTIONS_COMMAND):
-            yield (key, val)
+        if opts := get_options(val, OPTIONS_COMMAND):
+            group_name = opts.get("group_name") or key
+            yield (group_name, val)
 
 
 def prompt_choices(question: str, choices: t.Sequence[str]):
@@ -152,21 +108,12 @@ def prompt_choices(question: str, choices: t.Sequence[str]):
     ).unsafe_ask()
 
 
-def tabulate_results(func=None, /, keys=()):
-    if func is None:
-        return functools.partial(tabulate_results, keys=keys)
-    @functools.wraps(func)
-    def decorated(*args, **kwargs):
-        result = func(*args, **kwargs)
-        echo(format_table(result, keys))
-
-    return decorated
-
-
-def validate_uuid(entry: str):
+def validate_uuid(entry: t.Union[str, uuid.UUID]):
+    if isinstance(entry, uuid.UUID):
+        return True
     try:
         uuid.UUID(entry)
     except ValueError:
         return False
-    
+
     return True
