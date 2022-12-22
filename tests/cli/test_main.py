@@ -4,6 +4,7 @@ import pytest
 from movici_api_client.cli.bootstrap import cli_factory
 from movici_api_client.cli.config import read_config
 from movici_api_client.cli.controllers.config import ConfigController
+from movici_api_client.cli.controllers.datasets import DatasetController
 from movici_api_client.cli.controllers.projects import ProjectController
 from movici_api_client.cli.main import login, main
 
@@ -13,10 +14,7 @@ def cli():
     return cli_factory(
         main=main,
         commands=[login],
-        controller_types=[
-            ProjectController,
-            ConfigController,
-        ],
+        controller_types=[ProjectController, ConfigController, DatasetController],
     )
 
 
@@ -31,5 +29,5 @@ def test_login_saves_context(cli, client, config_path):
     runner = click.testing.CliRunner()
     runner.invoke(cli, ["login"], input="user\npw\n", catch_exceptions=False)
     config = read_config(config_path)
-    assert config.current_context.auth_token == "some_auth_token"
-    assert config.current_context.username == "user"
+    assert config.current_context["auth_token"] == "some_auth_token"
+    assert config.current_context["username"] == "user"

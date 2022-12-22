@@ -1,5 +1,6 @@
-import dataclasses
 import functools
+import pathlib
+import typing as t
 
 from movici_api_client.api import Client, Response
 from movici_api_client.api.requests import CheckAuthToken
@@ -7,8 +8,8 @@ from movici_api_client.api.requests import CheckAuthToken
 from . import dependencies
 from .common import OPTIONS_COMMAND, get_options, has_options, set_options
 from .exceptions import InvalidActiveProject, MoviciCLIError, NoActiveProject, Unauthenticated
-from .ui import format_dataclass, format_dict, format_object, format_table
-from .utils import assert_current_context, echo, get_project_uuids, handle_movici_error
+from .ui import format_anything, format_table
+from .utils import DirPath, assert_current_context, echo, get_project_uuids, handle_movici_error
 
 
 def catch_exceptions(func):
@@ -32,7 +33,10 @@ def authenticated(func):
     @functools.wraps(func)
     def _decorated(*args, **kwargs):
         client = dependencies.get(Client)
-        client.request(CheckAuthToken(), on_error=on_error)
+
+        context = assert_current_context()
+        if context.get("auth"):
+            client.request(CheckAuthToken(), on_error=on_error)
         return func(*args, **kwargs)
 
     return _decorated
@@ -50,8 +54,7 @@ def argument(*args, **kwargs):
         if not has_options(func, OPTIONS_COMMAND):
             set_options(func, OPTIONS_COMMAND, {})
         opts = get_options(func, OPTIONS_COMMAND)
-
-        opts.setdefault("arguments", []).append((args, kwargs))
+        opts["arguments"] = [(args, kwargs), *opts.get("arguments", [])]
 
         return func
 
@@ -78,18 +81,10 @@ def format_output(func=None, /, fields=None, header=None):
     @functools.wraps(func)
     def decorated(*args, **kwargs):
         result = func(*args, **kwargs)
-        if isinstance(result, list):
-            output = format_table(result, fields)
-        elif fields is not None:
-            output = format_object(result, fields)
-        elif isinstance(result, dict):
-            output = format_dict(result)
-        elif dataclasses.is_dataclass(result):
-            output = format_dataclass(result)
-
+        result = format_anything(result, fields)
         if header is not None:
-            output = header + "\n" + output
-        echo(output)
+            result = header + "\n" + result
+        echo(result)
 
     return decorated
 
@@ -110,16 +105,54 @@ def valid_project_uuid(func):
     @functools.wraps(func)
     def decorated(*args, **kwargs):
         context = assert_current_context()
-        if not context.project:
+        project = context.get("project")
+        if not project:
             raise NoActiveProject()
 
         projects_dict = get_project_uuids()
 
         try:
-            project_uuid = projects_dict[context.project]
+            project_uuid = projects_dict[project]
         except KeyError:
-            raise InvalidActiveProject(context.project)
+            raise InvalidActiveProject(project)
 
         return func(project_uuid, *args, **kwargs)
 
     return decorated
+
+
+def upload_options(func):
+    return combine_decorators(
+        [
+            option("-o", "--overwrite", is_flag=True, help="Always overwrite"),
+            option("-c", "--create", is_flag=True, help="Always create if necessary"),
+            option(
+                "-y",
+                "--yes",
+                is_flag=True,
+                help="Answer yes to all questions, equivalent to -o -c",
+            ),
+            option("-n", "--no", is_flag=True, help="Answer no to all questions"),
+        ]
+    )(func)
+
+
+def download_options(func):
+    return combine_decorators(
+        [
+            option("-d", "--directory", type=DirPath(writable=True), default=pathlib.Path(".")),
+            option("-o", "-y", "--overwrite", is_flag=True, help="Always overwrite"),
+            option("-n", "--no-overwrite", is_flag=True, help="Never overwrite"),
+        ]
+    )(func)
+
+
+def combine_decorators(decorators: t.Iterable[callable]):
+    def decorator(func):
+        return functools.reduce(
+            lambda f, decorator: decorator(f),
+            decorators,
+            func,
+        )
+
+    return decorator

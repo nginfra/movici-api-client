@@ -4,7 +4,7 @@ import typing as t
 import uuid
 
 import questionary
-from click import Abort
+from click import Abort, Choice
 from click import Path as PathType
 from click import confirm, echo, prompt
 
@@ -29,6 +29,7 @@ prompt = prompt
 echo = echo
 Abort = Abort
 confirm = confirm
+Choice = Choice
 
 DirPath = functools.partial(
     PathType, file_okay=False, readable=True, exists=True, path_type=pathlib.Path
@@ -54,10 +55,10 @@ def assert_current_context():
 def assert_active_project(project=None):
     if project is None:
         context = assert_current_context()
-        if context.project is None:
+        try:
+            return assert_project_uuid(context["project"])
+        except KeyError:
             raise NoActiveProject()
-        project = context.project
-    return assert_project_uuid(project)
 
 
 def assert_resource_uuid(resource: str, request: Request, resource_type="resource"):
@@ -76,6 +77,43 @@ def get_resource_uuids(request: Request):
     client = dependencies.get(Client)
     all_resources = client.request(request)
     return {p["name"]: p["uuid"] for p in all_resources}
+
+
+def get_resource_uuid(name_or_uuid, request, resource_type="resource", client=None):
+    client = client or dependencies.get(Client)
+    return (
+        name_or_uuid
+        if validate_uuid(name_or_uuid)
+        else assert_resource_uuid(name_or_uuid, request=request, resource_type=resource_type)
+    )
+
+
+def get_resource(name_or_uuid, request, client=None, resource_type="resource"):
+    client = client or dependencies.get(Client)
+    all_resources = client.request(request)
+
+    match_field = "uuid" if validate_uuid(name_or_uuid) else "name"
+    for res in all_resources:
+        if name_or_uuid == res[match_field]:
+            return res
+    else:
+        InvalidResource(resource_type, name_or_uuid)
+
+
+def get_resource_name_and_uuid(name_or_uuid, request, client=None, resource_type="resource"):
+    client = client or dependencies.get(Client)
+    all_resources = client.request(request)
+
+    try:
+        if validate_uuid(name_or_uuid):
+            uuid = name_or_uuid
+            name = next(d["name"] for d in all_resources if d["uuid"] == uuid)
+        else:
+            name = name_or_uuid
+            uuid = next(d["uuid"] for d in all_resources if d["name"] == name)
+    except StopIteration:
+        raise InvalidResource("dataset", name_or_uuid)
+    return name, uuid
 
 
 def get_project_uuids():
@@ -115,7 +153,7 @@ def validate_uuid(entry: t.Union[str, uuid.UUID]):
     return True
 
 
-def resolve_question_flag(flag: bool, default_yes: bool, default_no: bool) -> t.Optional[bool]:
+def maybe_set_flag(flag: bool, default_yes: bool, default_no: bool) -> t.Optional[bool]:
     """Returns the value for a question-like flag. These flags can be set to either True/False or
     None in which case the user should be asked. If the flag is not specifically set to True and no
     default is given, flag is set to None. A positive flag value has precedence over a default no.

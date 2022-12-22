@@ -7,27 +7,48 @@ import typing as t
 import httpx
 from httpx import Response  # do not remove, this is exported to consumers
 
-from .common import Auth, BaseApi, BaseRequest
+from .common import Auth, BaseApi, BaseRequest, MoviciServiceUnavailable, Service, urljoin
 
 T = t.TypeVar("T")
 
 ErrorCallback = t.Callable[[httpx.Response], bool]
 
 
+def parse_service_urls(bases_dict=None, prefix=""):
+    if bases_dict is None:
+        bases_dict = {}
+    service_by_name = Service.by_name()
+    rv = {}
+
+    sentinel = object()
+    for name, service in service_by_name.items():
+        result = bases_dict.get(prefix + name, sentinel)
+        if result is None:
+            continue
+        if result is sentinel:
+            rv[service] = service.value[1]
+        else:
+            rv[service] = result
+
+    return rv
+
+
 class Client(BaseApi):
     def __init__(
         self,
         base_url: str,
-        auth: t.Optional[Auth] = None,
+        auth: t.Union[Auth, None, False] = None,
         client: t.Optional[httpx.Client] = None,
         logger: t.Optional[logging.Logger] = None,
         on_error: t.Optional[ErrorCallback] = None,
+        service_urls: t.Optional[t.Dict[Service, str]] = None,
     ):
         self.base_url = base_url
         self.auth = auth
         self.client = client or httpx.Client()
         self.logger = logger
         self.on_error = on_error
+        self.service_urls = service_urls if service_urls is not None else parse_service_urls()
 
     def request(
         self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None
@@ -51,10 +72,22 @@ class Client(BaseApi):
 
     def _prepare_request_config(self, req: BaseRequest[T]):
         conf = req.generate_config(self)
-        conf = self.auth(conf)
+
+        if self.auth:
+            conf = self.auth(conf)
         if self.logger:
             self.logger.debug(str(conf))
         return conf
+
+    def resolve_service_url(self, service: t.Optional[Service]) -> str:
+        if service is None:
+            service_url = ""
+        else:
+            try:
+                service_url = self.service_urls[service]
+            except KeyError:
+                raise MoviciServiceUnavailable()
+        return urljoin(self.base_url, service_url)
 
     def _handle_failure(self, resp: Response, on_error: t.Optional[ErrorCallback] = None):
         if resp.status_code >= 400:

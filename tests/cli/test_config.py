@@ -13,7 +13,7 @@ from movici_api_client.cli.config import (
     read_config,
     write_config,
 )
-from movici_api_client.cli.exceptions import InvalidConfig
+from movici_api_client.cli.exceptions import InvalidConfigFile
 
 
 @pytest.fixture(autouse=True)
@@ -89,10 +89,10 @@ def test_invalid_config(tmp_path: pathlib.Path, content, msg):
     if content is not None:
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_text(content)
-    with pytest.raises(InvalidConfig) as e:
+    with pytest.raises(InvalidConfigFile) as e:
         get_config(file)
     assert e.value.msg == msg
-    assert e.value.path == file
+    assert e.value.file == file
 
 
 class TestConfig:
@@ -116,7 +116,7 @@ class TestConfig:
         assert activated_config.current_context.name == "my-context"
 
     def test_serializes_active_context(self, activated_config):
-        assert activated_config.asdict()["current_context"] == "my-context"
+        assert activated_config.as_dict()["current_context"] == "my-context"
 
     def test_get_config(self, config):
         assert config.get_context("my-context").url == "https://example.org"
@@ -165,16 +165,13 @@ class TestConfig:
                 auth_token="abcdef",
             )
         )
-        assert activated_config.asdict() == {
+        assert activated_config.as_dict() == {
             "version": 1,
             "current_context": "my-context",
             "contexts": [
                 {
                     "name": "my-context",
                     "url": "https://example.org",
-                    "project": None,
-                    "username": None,
-                    "auth_token": None,
                 },
                 {
                     "name": "some-context",
@@ -185,6 +182,10 @@ class TestConfig:
                 },
             ],
         }
+
+    def test_can_rename_current_config(self, activated_config):
+        activated_config.current_context.name = "new-name"
+        assert activated_config.as_dict()["current_context"] == "new-name"
 
 
 def test_serialize_and_deserialize_config(tmp_path):
@@ -200,3 +201,16 @@ def test_serialize_and_deserialize_config(tmp_path):
     write_config(config, file)
     result = read_config(file)
     assert result == config
+
+
+class TestContext:
+    @pytest.fixture
+    def context(self):
+        return Context("foo", "https://example.org")
+
+    def test_context_set_auth_boolean(self, context):
+        context["auth"] = "false"
+        assert context["auth"] is False
+
+    def test_default_value(self, context):
+        assert context["auth"] is True

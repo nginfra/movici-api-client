@@ -15,7 +15,7 @@ class LoginController:
         self.success = True
 
     def login(self, ask_username):
-        username = self.context.username
+        username = self.context.get("username")
         ask_username = ask_username or username is None
 
         while True:
@@ -37,5 +37,5 @@ class LoginController:
         return False  # stop error propagation in Client
 
     def handle_success(self, resp, username):
-        self.context.auth_token = resp["session"]
-        self.context.username = username
+        self.context["auth_token"] = resp["session"]
+        self.context["username"] = username

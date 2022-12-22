@@ -1,11 +1,30 @@
 from __future__ import annotations
 
+import enum
 import functools
 import typing as t
 from functools import reduce
 from urllib.parse import urljoin as urljoin_
 
 from httpx import Response
+
+
+class MoviciServiceUnavailable(Exception):
+    pass
+
+
+class Service(enum.Enum):
+    AUTH = ("auth", "/auth/v1/")
+    DATA_ENGINE = ("data_engine", "/data-engine/v4/")
+    MODEL_ENGINE = ("model_engine", "/model-engine/v1/")
+
+    @classmethod
+    def by_name(cls):
+        return {s.value[0]: s for s in cls}
+
+    @classmethod
+    def urls(cls):
+        return {s: s.value[1] for s in cls}
 
 
 class Auth:
@@ -17,7 +36,8 @@ class Auth:
 
 
 class BaseApi:
-    base_url: str
+    def resolve_service_url(self, service: t.Optional[Service]) -> str:
+        raise NotImplementedError
 
 
 T = t.TypeVar("T")
@@ -38,12 +58,14 @@ class BaseRequest(t.Generic[T]):
 
 class Request(BaseRequest):
     auth = True
+    service: t.Optional[Service] = None
 
     def generate_config(self, api: BaseApi):
         request = self.make_request()
+        base_url = api.resolve_service_url(self.service)
         return {
             **request,
-            "url": urljoin(api.base_url, request["url"]),
+            "url": urljoin(base_url, request["url"]),
         }
 
 

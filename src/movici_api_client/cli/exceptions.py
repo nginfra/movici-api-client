@@ -13,10 +13,15 @@ class MoviciCLIError(Exception):
 
 
 @dataclasses.dataclass
-class InvalidConfig(MoviciCLIError):
+class InvalidFile(MoviciCLIError):
     msg: str
-    path: pathlib.Path
-    template = "Invalid config file [{msg}]: {path}"
+    file: pathlib.Path
+
+    template = "Invalid file [{msg}]: {file!s}"
+
+
+class InvalidConfigFile(InvalidFile):
+    template = "Invalid config file [{msg}]: {file!s}"
 
 
 class NoCurrentContext(MoviciCLIError):
@@ -29,6 +34,12 @@ class NoConfig(MoviciCLIError):
 
 class Unauthenticated(MoviciCLIError):
     template = "Authentication expired, please login using `movici login`"
+
+
+@dataclasses.dataclass
+class DuplicateContext(MoviciCLIError, ValueError):
+    name: str
+    template = "Config {name} already exists"
 
 
 @dataclasses.dataclass
@@ -68,9 +79,3 @@ class NotYetImplemented(MoviciCLIError):
 class InvalidUsage(MoviciCLIError):
     msg: str
     template = "Invalid usage: {msg}"
-
-
-@dataclasses.dataclass
-class InvalidFile(MoviciCLIError):
-    file: pathlib.Path
-    template = "Invalid file: {file!s}"

@@ -19,7 +19,7 @@ class ProjectController(Controller):
 
     decorators = (authenticated,)
 
-    @command(name="projects")
+    @command(name="projects", group="get")
     @format_output(fields=("uuid", "name", "display_name", "created_on"))
     def list(self):
         client = get(Client)

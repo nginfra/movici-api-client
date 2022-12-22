@@ -1,10 +1,9 @@
 from movici_api_client.cli.config import Config, Context, write_config
-from movici_api_client.cli.exceptions import NoContextAvailable, NoSuchContext
-from movici_api_client.cli.ui import format_dataclass
+from movici_api_client.cli.exceptions import DuplicateContext, NoContextAvailable, NoSuchContext
 
 from .. import dependencies
 from ..common import Controller
-from ..decorators import argument, command, option
+from ..decorators import argument, command, format_output, option
 from ..utils import assert_context, confirm, echo, prompt
 
 
@@ -13,11 +12,15 @@ class ConfigController(Controller):
     reverse = False
 
     @command
-    def create(self):
+    @argument("name", required=False)
+    def create(self, name):
         config = dependencies.get(Config)
 
+        if config.get_context(name):
+            raise DuplicateContext(name)
+
         echo("Creating a new context, please give the following information")
-        name = prompt("Name")
+        name = name or prompt("Name")
         url = prompt("Base URL (eg: https://example.org/)")
         context = Context(name, url)
         config.add_context(context)
@@ -43,11 +46,39 @@ class ConfigController(Controller):
 
     @command
     @option("-a", "--all", is_flag=True)
+    @format_output
     def show(self, all):
         config = dependencies.get(Config)
         if all:
-            contexts = config.contexts
+            return config.contexts
         else:
-            contexts = [assert_context(config)]
+            return assert_context(config)
 
-        echo("\n\n".join(format_dataclass(c) for c in contexts))
+    @command
+    @argument("key")
+    @argument("value")
+    def set(self, key, value):
+        config = dependencies.get(Config)
+        context = assert_context(config)
+        context[key] = value
+
+        write_config(config)
+        echo("Context succesfully updated")
+
+    @command
+    @argument("keys", nargs=-1, required=True)
+    def unset(self, keys):
+
+        config = dependencies.get(Config)
+        context = assert_context(config)
+
+        for key in keys:
+            try:
+                del context[key]
+            except KeyError:
+                pass
+            except ValueError:
+                echo(f"Cannot unset read-only field '{key}'", err=True)
+
+        write_config(config)
+        echo("Context succesfully updated")

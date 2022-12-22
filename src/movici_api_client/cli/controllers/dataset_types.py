@@ -9,7 +9,7 @@ class DatasetTypeController(Controller):
     name = "dataset_type"
     decorators = (authenticated, format_output)
 
-    @command(name="dataset_types")
+    @command(name="dataset_types", group="get")
     def list(self):
         client = get(Client)
         return client.request(GetDatasetTypes())

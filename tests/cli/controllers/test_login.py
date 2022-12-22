@@ -44,7 +44,7 @@ def test_login_prompts_again_after_failure(controller, prompt):
 
 
 def test_login_asks_for_username_when_instructed(controller, prompt, context, client):
-    context.username = "some_user"
+    context["username"] = "some_user"
     prompt.side_effect = ["other_user", "password"]
     controller.login(ask_username=True)
     request = client.request.call_args[0][0]
@@ -54,12 +54,12 @@ def test_login_asks_for_username_when_instructed(controller, prompt, context, cl
 
 def test_login_writes_info_to_config(prompt, controller, context):
     controller.login(ask_username=True)
-    assert context.username == "user"
-    assert context.auth_token == "some_session_token"
+    assert context["username"] == "user"
+    assert context["auth_token"] == "some_session_token"
 
 
 def test_login_reads_username_from_context(controller, prompt, context, client):
-    context.username = "some_user"
+    context["username"] = "some_user"
     prompt.side_effect = ["wrong_password", "correct_password"]
     controller.client.set_response(status_code=401)
     controller.client.add_response({"session": "some_session_token"})
@@ -83,7 +83,7 @@ def test_login_reads_username_from_context(controller, prompt, context, client):
 def test_login_with_different_username_situations(
     user_in_context, ask_username, prompt_username, expected, controller, prompt
 ):
-    controller.context.username = user_in_context
+    controller.context["username"] = user_in_context
     prompt.return_value = prompt_username
     prompt.side_effect = None
 

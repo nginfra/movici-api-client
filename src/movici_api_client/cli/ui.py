@@ -4,11 +4,29 @@ import typing as t
 import tabulate
 
 
+def format_anything(obj, fields):
+    if isinstance(obj, list):
+        return format_table(obj, fields)
+    if callable(as_dict := getattr(obj, "as_dict", None)):
+        return as_dict()
+    if isinstance(obj, str):
+        return obj
+    if fields is not None:
+        return format_object(obj, fields)
+
+    # if fields is None we can fallback to methods that can determine field names
+    if isinstance(obj, dict):
+        return format_dict(obj)
+    if dataclasses.is_dataclass(obj):
+        return format_dataclass(obj)
+
+
 def format_object(obj, fields: t.Sequence[str], header=None):
     lines = []
     if header is not None:
         lines.append(header)
-    max_field_len = max(len(f) for f in fields)
+
+    max_field_len = max(len(f) for f in fields) if fields else None
     for field in fields:
         lines.append(f"{field:<{max_field_len}s}: {get_value(obj, field)!s}")
     return "\n".join(lines)

@@ -1,6 +1,7 @@
 from json import JSONDecodeError
 
 from movici_api_client.api import Client, MoviciTokenAuth, Response
+from movici_api_client.api.client import parse_service_urls
 from movici_api_client.cli.exceptions import InvalidResource
 
 from . import dependencies
@@ -25,15 +26,18 @@ def main(project_override):
     if not (context := config.current_context):
         return
 
+    auth = MoviciTokenAuth(auth_token=context.get("auth_token")) if context.get("auth") else False
+
     client = Client(
         base_url=context.url,
-        auth=MoviciTokenAuth(auth_token=context.auth_token),
+        auth=auth,
         on_error=handle_http_error,
+        service_urls=parse_service_urls(context, prefix="service."),
     )
     dependencies.set(client)
 
     if project_override:
-        context.project = project_override
+        context["project"] = project_override
 
 
 def handle_http_error(resp: Response):
@@ -70,6 +74,6 @@ def activate_project(project):
     if project not in projects_dict:
         raise InvalidResource("project", project)
 
-    context.project = project
+    context["project"] = project
     write_config(config)
     echo(f"Project {project} succefully activated!")

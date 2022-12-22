@@ -4,7 +4,7 @@ import pytest
 
 from movici_api_client.cli.common import OPTIONS_COMMAND, has_options
 from movici_api_client.cli.decorators import command
-from movici_api_client.cli.utils import iter_commands, resolve_question_flag, validate_uuid
+from movici_api_client.cli.utils import iter_commands, maybe_set_flag, validate_uuid
 
 
 def test_command():
@@ -78,4 +78,4 @@ def test_invalid_uuid():
     ],
 )
 def test_set_question_flag(flag, default_yes, default_no, expected):
-    assert resolve_question_flag(flag, default_yes, default_no) == expected
+    assert maybe_set_flag(flag, default_yes, default_no) == expected

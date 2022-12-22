@@ -3,17 +3,25 @@ import io
 import pathlib
 import typing as t
 
-from .common import Request, Response, pick, simple_request, unwrap_envelope, urljoin
+import httpx
+
+from .common import Request, Service, pick, simple_request, unwrap_envelope, urljoin
 
 
-class APIBase:
-    AUTH = "/auth/v1/"
-    DATA_ENGINE = "/data-engine/v4/"
-    MODEL_ENGINE = "/model-engine/v1/"
+class AuthRequest(Request):
+    service = Service.AUTH
+
+
+class DataEngineRequest(Request):
+    service = Service.DATA_ENGINE
+
+
+class SimulationControlRequest(Request):
+    service = Service.MODEL_ENGINE
 
 
 @dataclasses.dataclass
-class Login(Request):
+class Login(AuthRequest):
     auth = False
     username: str
     password: str
@@ -21,103 +29,102 @@ class Login(Request):
     def make_request(self):
         return {
             "method": "POST",
-            "url": urljoin(APIBase.AUTH, "user", "login"),
+            "url": "user/login",
             "json": pick(self, ["username", "password"]),
         }
 
 
 @dataclasses.dataclass
-class CheckAuthToken(Request):
+class CheckAuthToken(AuthRequest):
+    service = Service.AUTH
+
     auth_token: t.Optional[str] = None
 
     def make_request(self):
         req = {
             "method": "GET",
-            "url": urljoin(APIBase.AUTH, "auth"),
+            "url": "auth",
         }
         if self.auth_token is not None:
             req["headers"] = {"Authorization": self.auth_token}
         return req
 
 
-class GetProjects(Request):
+@unwrap_envelope("projects")
+class GetProjects(DataEngineRequest):
     @simple_request
     def make_request(self):
-        return urljoin(APIBase.DATA_ENGINE, "projects")
-
-    def make_response(self, resp: Response):
-        return resp.json()["projects"]
+        return "projects"
 
 
 @dataclasses.dataclass
-class GetSingleProject(Request):
+class GetSingleProject(DataEngineRequest):
     uuid: str
 
     @simple_request
     def make_request(self):
-        return urljoin(APIBase.DATA_ENGINE, "projects", self.uuid)
+        return urljoin("projects", self.uuid)
 
 
 @dataclasses.dataclass
-class CreateProject(Request):
+class CreateProject(DataEngineRequest):
+
     name: str
     display_name: str
 
     def make_request(self):
         return {
             "method": "POST",
-            "url": urljoin(APIBase.DATA_ENGINE, "projects"),
+            "url": "projects",
             "json": pick(self, ["name", "display_name"]),
         }
 
 
 @dataclasses.dataclass
-class UpdateProject(Request):
+class UpdateProject(DataEngineRequest):
     uuid: str
     display_name: str
 
     def make_request(self):
         return {
             "method": "PUT",
-            "url": urljoin(APIBase.DATA_ENGINE, "projects", self.uuid),
+            "url": urljoin("projects", self.uuid),
             "json": pick(self, ["display_name"]),
         }
 
 
 @dataclasses.dataclass
-class DeleteProject(Request):
+class DeleteProject(DataEngineRequest):
     uuid: str
 
     def make_request(self):
         return {
             "method": "DELETE",
-            "url": urljoin(APIBase.DATA_ENGINE, "projects", self.uuid),
+            "url": urljoin("projects", self.uuid),
         }
 
 
 @dataclasses.dataclass
-class GetDatasets(Request):
+@unwrap_envelope("datasets")
+class GetDatasets(DataEngineRequest):
     project_uuid: str
 
     @simple_request
     def make_request(self):
-        return urljoin(APIBase.DATA_ENGINE, "projects", self.project_uuid, "datasets")
-
-    def make_response(self, resp: Response):
-        return resp.json()["datasets"]
+        return urljoin("projects", self.project_uuid, "datasets")
 
 
 @dataclasses.dataclass
-class GetSingleDataset(Request):
+class GetSingleDataset(DataEngineRequest):
     uuid: str
 
     @simple_request
     def make_request(self):
-        return urljoin(APIBase.DATA_ENGINE, "datasets", self.uuid)
+        return urljoin("datasets", self.uuid)
 
 
 @dataclasses.dataclass
-class CreateDataset(Request):
+class CreateDataset(DataEngineRequest):
     project_uuid: str
     name: str
     type: str
@@ -126,13 +133,13 @@ class CreateDataset(Request):
     def make_request(self):
         return {
             "method": "POST",
-            "url": urljoin(APIBase.DATA_ENGINE, "projects", self.project_uuid, "datasets"),
+            "url": urljoin("projects", self.project_uuid, "datasets"),
             "json": pick(self, ("name", "type", "display_name")),
         }
 
 
 @dataclasses.dataclass
-class UpdateDataset(Request):
+class UpdateDataset(DataEngineRequest):
     uuid: str
     name: t.Optional[str] = None
     type: t.Optional[str] = None
@@ -141,7 +148,7 @@ class UpdateDataset(Request):
     def make_request(self):
         return {
             "method": "PUT",
-            "url": urljoin(APIBase.DATA_ENGINE, "datasets", self.uuid),
+            "url": urljoin("datasets", self.uuid),
             "json": {
                 k: v
                 for k, v in pick(self, ("name", "type", "display_name")).items()
@@ -151,24 +158,24 @@ class UpdateDataset(Request):
 
 
 @dataclasses.dataclass
-class DeleteDataset(Request):
+class DeleteDataset(DataEngineRequest):
     uuid: str
 
     def make_request(self):
-        return {"method": "DELETE", "url": urljoin(APIBase.DATA_ENGINE, "datasets", self.uuid)}
+        return {"method": "DELETE", "url": urljoin("datasets", self.uuid)}
 
 
 @dataclasses.dataclass
-class GetDatasetData(Request):
+class GetDatasetData(DataEngineRequest):
     uuid: str
 
     @simple_request
     def make_request(self):
-        return urljoin(APIBase.DATA_ENGINE, "datasets", self.uuid, "data")
+        return urljoin("datasets", self.uuid, "data")
 
 
 @dataclasses.dataclass
-class AddDatasetData(Request):
+class AddDatasetData(DataEngineRequest):
     uuid: str
     file: t.Union[str, pathlib.Path, io.BufferedIOBase]
 
@@ -179,31 +186,133 @@ class AddDatasetData(Request):
 
         return {
             "method": "POST",
-            "url": urljoin(APIBase.DATA_ENGINE, "datasets", self.uuid, "data"),
+            "url": urljoin("datasets", self.uuid, "data"),
             "files": {
                 "data": file,
             },
+            "timeout": httpx.Timeout(10.0, read=60.0),
         }
 
 
 class ModifiyDatasetData(AddDatasetData):
     def make_request(self):
-        return {**super().make_request(), "method": "PUT"}
+        result = {**super().make_request(), "params": {"overwrite": True}}
+        return result
 
 
 @dataclasses.dataclass
-class DeleteDatasetData(Request):
+class DeleteDatasetData(DataEngineRequest):
     uuid: str
 
     def make_request(self):
         return {
             "method": "DELETE",
-            "url": urljoin(APIBase.DATA_ENGINE, "datasets", self.uuid, "data"),
+            "url": urljoin("datasets", self.uuid, "data"),
+        }
+
+
+@dataclasses.dataclass
+@unwrap_envelope("scenarios")
+class GetScenarios(DataEngineRequest):
+    project_uuid: str
+
+    @simple_request
+    def make_request(self):
+        return urljoin("projects", self.project_uuid, "scenarios")
+
+
+@dataclasses.dataclass
+class GetSingleScenario(DataEngineRequest):
+    uuid: str
+
+    @simple_request
+    def make_request(self):
+        return urljoin("scenarios", self.uuid)
+
+
+@dataclasses.dataclass
+class CreateScenario(DataEngineRequest):
+    project_uuid: str
+    payload: dict
+
+    def make_request(self):
+        return {
+            "method": "POST",
+            "url": urljoin("projects", self.project_uuid, "scenarios"),
+            "json": self.payload,
+        }
+
+
+@dataclasses.dataclass
+class UpdateScenario(DataEngineRequest):
+    uuid: str
+    payload: dict
+
+    def make_request(self):
+        return {
+            "method": "PUT",
+            "url": urljoin("scenarios", self.uuid),
+            "json": self.payload,
+        }
+
+
+@dataclasses.dataclass
+class DeleteScenario(DataEngineRequest):
+    uuid: str
+
+    def make_request(self):
+        return {
+            "method": "DELETE",
+            "url": urljoin("scenarios", self.uuid),
+        }
+
+
+@dataclasses.dataclass
+class DeleteTimeline(DataEngineRequest):
+    uuid: str
+
+    def make_request(self):
+        return {
+            "method": "DELETE",
+            "url": urljoin("scenarios", self.uuid, "timeline"),
+        }
+
+
+@dataclasses.dataclass
+class GetSimulation(SimulationControlRequest):
+    uuid: str
+
+    def make_request(self):
+        return {
+            "method": "GET",
+            "url": urljoin("simulations", self.uuid),
+        }
+
+
+@dataclasses.dataclass
+class RunSimulation(SimulationControlRequest):
+    uuid: str
+
+    def make_request(self):
+        return {
+            "method": "POST",
+            "url": urljoin("simulations", self.uuid),
+        }
+
+
+@dataclasses.dataclass
+class DeleteSimulation(SimulationControlRequest):
+    uuid: str
+
+    def make_request(self):
+        return {
+            "method": "DELETE",
+            "url": urljoin("simulations", self.uuid),
         }
 
 
 @unwrap_envelope("dataset_types")
-class GetDatasetTypes(Request):
+class GetDatasetTypes(DataEngineRequest):
     @simple_request
     def make_request(self):
-        return urljoin(APIBase.DATA_ENGINE, "schema/dataset_types")
+        return urljoin("schema/dataset_types")

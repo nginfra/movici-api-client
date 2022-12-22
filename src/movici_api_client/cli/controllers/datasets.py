@@ -1,24 +1,24 @@
-import functools
 import pathlib
-import typing as t
 
 from movici_api_client.api.client import Client
 from movici_api_client.api.requests import (
     CreateDataset,
     DeleteDataset,
     DeleteDatasetData,
+    GetDatasetData,
     GetDatasets,
     GetDatasetTypes,
     GetSingleDataset,
     UpdateDataset,
 )
 from movici_api_client.cli.dependencies import get
-from movici_api_client.cli.exceptions import InvalidResource, InvalidUsage
+from movici_api_client.cli.exceptions import InvalidUsage
 from movici_api_client.cli.filetransfer import (
-    download_dataset_data,
+    DatasetUploadStrategy,
+    MultipleResourceUploader,
+    ResourceUploader,
     download_multiple_dataset_data,
-    upload_multiple,
-    upload_new_dataset,
+    download_resource,
 )
 from movici_api_client.cli.utils import DirPath, confirm, echo, prompt
 
@@ -26,43 +26,20 @@ from ..common import Controller
 from ..decorators import (
     argument,
     authenticated,
+    combine_decorators,
     command,
+    download_options,
     format_output,
     option,
+    upload_options,
     valid_project_uuid,
 )
-from ..utils import (
-    FilePath,
-    assert_resource_uuid,
-    prompt_choices,
-    resolve_question_flag,
-    validate_uuid,
-)
+from ..utils import FilePath, get_resource, get_resource_uuid, maybe_set_flag, prompt_choices
 
 
-def combine_decorators(decorators: t.Iterable[callable]):
-    def decorator(func):
-        return functools.reduce(
-            lambda f, decorator: decorator(f),
-            decorators,
-            func,
-        )
-
-    return decorator
-
-
-def upload_data_options(func):
+def upload_dataset_options(func):
     return combine_decorators(
         [
-            option("-o", "--overwrite", is_flag=True, help="Always overwrite existing data"),
-            option("-c", "--create", is_flag=True, help="Always create new datasets"),
-            option(
-                "-y",
-                "--yes",
-                is_flag=True,
-                help="Answer yes to all questions, equivalent to -o -c",
-            ),
-            option("-n", "--no", is_flag=True, help="Answer no to all questions"),
             option(
                 "-i",
                 "--inspect",
@@ -70,24 +47,14 @@ def upload_data_options(func):
                 help="Try to read files to determine their dataset type, less performant",
             ),
         ]
-    )(func)
+    )(upload_options(func))
 
 
-def download_data_options(func):
-    return combine_decorators(
-        [
-            option("-d", "--directory", type=DirPath(writable=True), default=pathlib.Path(".")),
-            option("-o", "-y", "--overwrite", is_flag=True, help="Always overwrite existing data"),
-            option("-n", "--no-overwrite", is_flag=True, help="Never overwrite existing data"),
-        ]
-    )(func)
-
-
-class DatasetCrontroller(Controller):
+class DatasetController(Controller):
     name = "dataset"
-    decorators = (authenticated, valid_project_uuid)
+    decorators = (valid_project_uuid, authenticated)
 
-    @command(name="datasets")
+    @command(name="datasets", group="get")
     @format_output(
         fields=(
             "uuid",
@@ -169,82 +136,67 @@ class DatasetCrontroller(Controller):
     @command
     @argument("name_or_uuid", default="")
     @option("-f", "--file", type=FilePath(), required=True)
-    @upload_data_options
+    @upload_dataset_options
     def upload(
         self, project_uuid, name_or_uuid, file: pathlib.Path, overwrite, create, yes, no, inspect
     ):
         name_or_uuid = name_or_uuid or file.stem
-        client = get(Client)
-        uuid = get_dataset_uuid(name_or_uuid, project_uuid, client=client)
-        return upload_new_dataset(uuid, file)
+
+        strategy = DatasetUploadStrategy(client=get(Client))
+        uploader = ResourceUploader(file, project_uuid, strategy=strategy)
+        uploader.upload(
+            overwrite=maybe_set_flag(overwrite, yes, no),
+            create_new=maybe_set_flag(create, yes, no),
+            inspect_files=inspect,
+        )
+        echo("Success!")
 
     @command(name="datasets", group="upload")
     @option("-d", "--directory", type=DirPath(), required=True)
-    @upload_data_options
+    @upload_dataset_options
     def upload_multiple(self, project_uuid, directory, overwrite, create, yes, no, inspect):
         if yes and no:
             raise InvalidUsage("cannot combine --force with --never")
-
-        upload_multiple(
-            directory,
-            project_uuid,
-            extensions={".json", ".msgpack", ".csv", ".nc", ".tiff", ".tif", ".geotif", ".geotif"},
-            overwrite=resolve_question_flag(overwrite, yes, no),
-            create_new=resolve_question_flag(create, yes, no),
+        strategy = DatasetUploadStrategy(client=get(Client))
+        uploader = MultipleResourceUploader(directory, project_uuid, strategy=strategy)
+        uploader.upload(
+            overwrite=maybe_set_flag(overwrite, yes, no),
+            create_new=maybe_set_flag(create, yes, no),
             inspect_files=inspect,
         )
         echo("Success!")
 
     @command
     @argument("name_or_uuid")
-    @download_data_options
+    @download_options
     def download(self, project_uuid, name_or_uuid, directory, overwrite, no_overwrite):
         if overwrite and no_overwrite:
             raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
         client = get(Client)
-        name, uuid = get_dataset_name_and_uuid(name_or_uuid, project_uuid)
-        download_dataset_data(
+        dataset = get_resource(name_or_uuid, project_uuid, "dataset")
+        download_resource(
             client=client,
-            name=name,
-            uuid=uuid,
+            name=dataset["name"],
+            request=GetDatasetData(dataset["uuid"]),
             directory=directory,
-            overwrite=resolve_question_flag(False, default_yes=overwrite, default_no=no_overwrite),
+            overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite),
         )
         echo("Success!")
 
     @command(name="datasets", group="download")
-    @download_data_options
+    @download_options
     def download_multiple(self, project_uuid, directory, overwrite, no_overwrite):
         client = get(Client)
         download_multiple_dataset_data(
             client=client,
             project_uuid=project_uuid,
             directory=directory,
-            overwrite=resolve_question_flag(False, default_yes=overwrite, default_no=no_overwrite),
+            overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite),
         )
         echo("Success!")
 
 
 def get_dataset_uuid(name_or_uuid, project_uuid, client=None):
-    client = client or get(Client)
-    return (
-        name_or_uuid
-        if validate_uuid(name_or_uuid)
-        else assert_resource_uuid(name_or_uuid, GetDatasets(project_uuid), "dataset")
+    return get_resource_uuid(
+        name_or_uuid, request=GetDatasets(project_uuid), resource_type="dataset", client=client
     )
-
-
-def get_dataset_name_and_uuid(name_or_uuid, project_uuid, client=None):
-    client = client or get(Client)
-    all_datasets = client.request(GetDatasets(project_uuid))
-
-    try:
-        if validate_uuid(name_or_uuid):
-            uuid = name_or_uuid
-            name = next(d["name"] for d in all_datasets if d["uuid"] == uuid)
-        else:
-            name = name_or_uuid
-            uuid = next(d["uuid"] for d in all_datasets if d["name"] == name)
-    except StopIteration:
-        raise InvalidResource("dataset", name_or_uuid)
-    return name, uuid
