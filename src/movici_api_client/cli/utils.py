@@ -91,13 +91,12 @@ def get_resource_uuid(name_or_uuid, request, resource_type="resource", client=No
 def get_resource(name_or_uuid, request, client=None, resource_type="resource"):
     client = client or dependencies.get(Client)
     all_resources = client.request(request)
-
     match_field = "uuid" if validate_uuid(name_or_uuid) else "name"
     for res in all_resources:
         if name_or_uuid == res[match_field]:
             return res
     else:
-        InvalidResource(resource_type, name_or_uuid)
+        raise InvalidResource(resource_type, name_or_uuid)
 
 
 def get_resource_name_and_uuid(name_or_uuid, request, client=None, resource_type="resource"):
@@ -140,6 +139,15 @@ def prompt_choices(question: str, choices: t.Sequence[str]):
         use_shortcuts=len(choices) < 36,
         use_arrow_keys=True,
     ).unsafe_ask()
+
+
+async def prompt_choices_async(question: str, choices: t.Sequence[str]):
+    return await questionary.select(
+        question,
+        choices=choices,
+        use_shortcuts=len(choices) < 36,
+        use_arrow_keys=True,
+    ).unsafe_ask_async()
 
 
 def validate_uuid(entry: t.Union[str, uuid.UUID]):

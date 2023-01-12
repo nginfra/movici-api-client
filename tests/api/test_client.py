@@ -1,7 +1,6 @@
 import pytest
 
-from movici_api_client.api.client import parse_service_urls
-from movici_api_client.api.common import Service
+from movici_api_client.api.common import Service, parse_service_urls
 
 
 @pytest.mark.parametrize(

@@ -1,7 +1,7 @@
 from json import JSONDecodeError
 
-from movici_api_client.api import Client, MoviciTokenAuth, Response
-from movici_api_client.api.client import parse_service_urls
+from movici_api_client.api import Client, HTTPError, MoviciTokenAuth, Response
+from movici_api_client.api.common import parse_service_urls
 from movici_api_client.cli.exceptions import InvalidResource
 
 from . import dependencies
@@ -48,6 +48,13 @@ def handle_http_error(resp: Response):
 
     echo(f"HTTP Error: {msg}")
     raise Abort()
+
+
+def handle_global_error(exc: Exception):
+    if isinstance(exc, HTTPError):
+        echo(f"A HTTP Error occured: {type(exc).__name__}({exc!s})")
+    else:
+        raise exc from None
 
 
 @command

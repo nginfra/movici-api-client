@@ -6,7 +6,7 @@ _repository = {}
 _fixed_types = set()
 
 
-def get(tp: t.Type[T]) -> t.Optional[T]:
+def get(tp: t.Type[T]) -> T:
     return _repository[tp]
 
 

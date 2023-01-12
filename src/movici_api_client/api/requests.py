@@ -268,6 +268,17 @@ class DeleteScenario(DataEngineRequest):
 
 
 @dataclasses.dataclass
+class CreateTimeline(DataEngineRequest):
+    uuid: str
+
+    def make_request(self):
+        return {
+            "method": "POST",
+            "url": urljoin("scenarios", self.uuid, "timeline"),
+        }
+
+
+@dataclasses.dataclass
 class DeleteTimeline(DataEngineRequest):
     uuid: str
 
@@ -308,6 +319,38 @@ class DeleteSimulation(SimulationControlRequest):
         return {
             "method": "DELETE",
             "url": urljoin("simulations", self.uuid),
+        }
+
+
+@dataclasses.dataclass
+@unwrap_envelope("updates")
+class GetUpdates(DataEngineRequest):
+    scenario_uuid: str
+
+    @simple_request
+    def make_request(self):
+        return urljoin("scenarios", self.scenario_uuid, "updates")
+
+
+@dataclasses.dataclass
+class GetSingleUpdate(DataEngineRequest):
+    uuid: str
+
+    @simple_request
+    def make_request(self):
+        return urljoin("updates", self.uuid)
+
+
+@dataclasses.dataclass
+class CreateUpdate(DataEngineRequest):
+    scenario_uuid: str
+    payload: dict
+
+    def make_request(self):
+        return {
+            "method": "POST",
+            "url": urljoin("scenarios", self.scenario_uuid, "updates"),
+            "json": self.payload,
         }
 
 

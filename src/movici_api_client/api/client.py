@@ -3,37 +3,25 @@ from __future__ import annotations
 import contextlib
 import logging
 import typing as t
+from asyncio import Semaphore
 
 import httpx
-from httpx import Response  # do not remove, this is exported to consumers
+from httpx import HTTPError, Response  # noqa
 
-from .common import Auth, BaseApi, BaseRequest, MoviciServiceUnavailable, Service, urljoin
+from .common import (
+    Auth,
+    BaseClient,
+    BaseRequest,
+    ErrorCallback,
+    IAsyncClient,
+    ISyncClient,
+    Service,
+)
 
 T = t.TypeVar("T")
 
-ErrorCallback = t.Callable[[httpx.Response], bool]
 
-
-def parse_service_urls(bases_dict=None, prefix=""):
-    if bases_dict is None:
-        bases_dict = {}
-    service_by_name = Service.by_name()
-    rv = {}
-
-    sentinel = object()
-    for name, service in service_by_name.items():
-        result = bases_dict.get(prefix + name, sentinel)
-        if result is None:
-            continue
-        if result is sentinel:
-            rv[service] = service.value[1]
-        else:
-            rv[service] = result
-
-    return rv
-
-
-class Client(BaseApi):
+class Client(BaseClient, ISyncClient):
     def __init__(
         self,
         base_url: str,
@@ -43,21 +31,13 @@ class Client(BaseApi):
         on_error: t.Optional[ErrorCallback] = None,
         service_urls: t.Optional[t.Dict[Service, str]] = None,
     ):
-        self.base_url = base_url
-        self.auth = auth
+        super().__init__(base_url, auth, logger, on_error, service_urls)
         self.client = client or httpx.Client()
-        self.logger = logger
-        self.on_error = on_error
-        self.service_urls = service_urls if service_urls is not None else parse_service_urls()
 
     def request(
         self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None
     ) -> t.Optional[T]:
-        if req.auth:
-            if self.auth is None:
-                raise ValueError(
-                    "request is authenticated, but no authenticationprovider configured"
-                )
+        self._assert_auth(req)
         conf = self._prepare_request_config(req)
         resp = self.client.request(**conf)
         self._handle_failure(resp, on_error)
@@ -67,43 +47,75 @@ class Client(BaseApi):
     def stream(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
         conf = self._prepare_request_config(req)
         with self.client.stream(**conf) as resp:
-            self._handle_failure(resp)
+            self._handle_failure(resp, on_error)
             yield resp
 
-    def _prepare_request_config(self, req: BaseRequest[T]):
-        conf = req.generate_config(self)
 
-        if self.auth:
-            conf = self.auth(conf)
-        if self.logger:
-            self.logger.debug(str(conf))
-        return conf
+class AsyncClient(BaseClient, IAsyncClient):
+    client: t.Optional[httpx.AsyncClient]
 
-    def resolve_service_url(self, service: t.Optional[Service]) -> str:
-        if service is None:
-            service_url = ""
-        else:
-            try:
-                service_url = self.service_urls[service]
-            except KeyError:
-                raise MoviciServiceUnavailable()
-        return urljoin(self.base_url, service_url)
+    def __init__(
+        self,
+        base_url: str,
+        auth: t.Union[Auth, None, False] = None,
+        client_factory: t.Type[httpx.AsyncClient] = httpx.AsyncClient,
+        logger: t.Optional[logging.Logger] = None,
+        on_error: t.Optional[ErrorCallback] = None,
+        service_urls: t.Optional[t.Dict[Service, str]] = None,
+        max_concurrent=10,
+    ):
+        super().__init__(base_url, auth, logger, on_error, service_urls)
+        self.client_factory = client_factory
+        self.client = None
+        self.concurrent_requests = Semaphore(max_concurrent)
+        self.enter_count = 0
 
-    def _handle_failure(self, resp: Response, on_error: t.Optional[ErrorCallback] = None):
-        if resp.status_code >= 400:
-            run_global_error_callback = True
-            if on_error:
-                # a "local" error callback can return False to indicate that all error handling
-                # has been completed and the global error handling should not take place. We need
-                # to specifcally look for False and not just Falsy (ie: None)
-                run_global_error_callback = on_error(resp) is not False
-            if not run_global_error_callback:
-                return
-            if self.on_error:
-                self.on_error(resp)
-            else:
-                resp.raise_for_status()
+    async def request(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
+        async with self.concurrent_requests:
+            if self.client is None:
+                self.client = self.client_factory()
+            self._assert_auth(req)
+            conf = self._prepare_request_config(req)
 
+            resp = await self.client.request(**conf)
 
-class AsyncClient(BaseApi):
-    ...
+            self._handle_failure(resp, on_error)
+            return req.make_response(resp)
+
+    @contextlib.asynccontextmanager
+    async def stream(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
+        async with self.concurrent_requests:
+            if self.client is None:
+                self.client = self.client_factory()
+            conf = self._prepare_request_config(req)
+            async with self.client.stream(**conf) as resp:
+                self._handle_failure(resp, on_error)
+                yield resp
+
+    async def close(self):
+        if self.client is None:
+            return
+
+        await self.client.aclose()
+        self.client = None
+
+    async def __aenter__(self):
+        if self.client is None:
+            self.client = self.client_factory()
+        self.enter_count += 1
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.enter_count -= 1
+        if self.enter_count <= 0:
+            await self.close()
+
+    @classmethod
+    def from_sync_client(cls, client: Client):
+        return AsyncClient(
+            base_url=client.base_url,
+            auth=client.auth,
+            logger=client.logger,
+            on_error=client.on_error,
+            service_urls=client.service_urls,
+        )

@@ -5,10 +5,11 @@ import tabulate
 
 
 def format_anything(obj, fields):
+
     if isinstance(obj, list):
         return format_table(obj, fields)
     if callable(as_dict := getattr(obj, "as_dict", None)):
-        return as_dict()
+        return format_dict(as_dict())
     if isinstance(obj, str):
         return obj
     if fields is not None:

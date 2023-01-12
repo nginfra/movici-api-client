@@ -1,4 +1,5 @@
 import functools
+import sys
 
 import click
 
@@ -66,11 +67,23 @@ def register_command(group: click.Group, command, name=None):
     group.add_command(command, name)
 
 
-def cli_factory(main, commands=None, controller_types=None):
+def cli_factory(main, commands=None, controller_types=None, result_callback=None, on_error=None):
     main = create_click_command(catch_exceptions(main), factory=click.group)
     for cmd in commands or []:
         register_command(main, cmd)
 
     for ct in controller_types or []:
         register_controller(main, ct())
+    if result_callback:
+        main.result_callback()(result_callback)
+    if on_error:
+
+        def safe_invoke():
+            try:
+                return main()
+            except Exception as e:
+                on_error(e)
+                sys.exit(1)
+
+        return safe_invoke
     return main

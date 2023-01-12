@@ -4,7 +4,7 @@ import pathlib
 from .exceptions import InvalidFile
 
 
-def read_json_file(file: pathlib.Path):
+def read_json_file(file: pathlib.Path) -> dict:
     if not file.is_file():
         raise InvalidFile("not a file")
     try:

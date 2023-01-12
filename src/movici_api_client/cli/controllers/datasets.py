@@ -1,6 +1,7 @@
+import asyncio
 import pathlib
 
-from movici_api_client.api.client import Client
+from movici_api_client.api.client import AsyncClient, Client
 from movici_api_client.api.requests import (
     CreateDataset,
     DeleteDataset,
@@ -11,16 +12,6 @@ from movici_api_client.api.requests import (
     GetSingleDataset,
     UpdateDataset,
 )
-from movici_api_client.cli.dependencies import get
-from movici_api_client.cli.exceptions import InvalidUsage
-from movici_api_client.cli.filetransfer import (
-    DatasetUploadStrategy,
-    MultipleResourceUploader,
-    ResourceUploader,
-    download_multiple_dataset_data,
-    download_resource,
-)
-from movici_api_client.cli.utils import DirPath, confirm, echo, prompt
 
 from ..common import Controller
 from ..decorators import (
@@ -34,7 +25,26 @@ from ..decorators import (
     upload_options,
     valid_project_uuid,
 )
-from ..utils import FilePath, get_resource, get_resource_uuid, maybe_set_flag, prompt_choices
+from ..dependencies import get
+from ..exceptions import InvalidUsage
+from ..filetransfer import (
+    DatasetUploadStrategy,
+    DownloadDatasets,
+    DownloadResource,
+    UploadDataset,
+    UploadMultipleResources,
+)
+from ..utils import (
+    DirPath,
+    FilePath,
+    confirm,
+    echo,
+    get_resource,
+    get_resource_uuid,
+    maybe_set_flag,
+    prompt,
+    prompt_choices,
+)
 
 
 def upload_dataset_options(func):
@@ -141,28 +151,40 @@ class DatasetController(Controller):
         self, project_uuid, name_or_uuid, file: pathlib.Path, overwrite, create, yes, no, inspect
     ):
         name_or_uuid = name_or_uuid or file.stem
-
-        strategy = DatasetUploadStrategy(client=get(Client))
-        uploader = ResourceUploader(file, project_uuid, strategy=strategy)
-        uploader.upload(
-            overwrite=maybe_set_flag(overwrite, yes, no),
-            create_new=maybe_set_flag(create, yes, no),
-            inspect_files=inspect,
+        client = AsyncClient.from_sync_client(get(Client))
+        asyncio.run(
+            UploadDataset(
+                client,
+                file,
+                parent_uuid=project_uuid,
+                name_or_uuid=name_or_uuid,
+                overwrite=maybe_set_flag(overwrite, yes, no),
+                create_new=maybe_set_flag(create, yes, no),
+                inspect_file=inspect,
+            ).run()
         )
+
         echo("Success!")
 
     @command(name="datasets", group="upload")
-    @option("-d", "--directory", type=DirPath(), required=True)
+    @option("-d", "--directory", type=DirPath(), default=pathlib.Path("."))
     @upload_dataset_options
     def upload_multiple(self, project_uuid, directory, overwrite, create, yes, no, inspect):
         if yes and no:
             raise InvalidUsage("cannot combine --force with --never")
-        strategy = DatasetUploadStrategy(client=get(Client))
-        uploader = MultipleResourceUploader(directory, project_uuid, strategy=strategy)
-        uploader.upload(
-            overwrite=maybe_set_flag(overwrite, yes, no),
-            create_new=maybe_set_flag(create, yes, no),
-            inspect_files=inspect,
+        client = AsyncClient.from_sync_client(get(Client))
+        strategy = DatasetUploadStrategy(client=client)
+
+        asyncio.run(
+            UploadMultipleResources(
+                client,
+                directory,
+                project_uuid,
+                strategy=strategy,
+                overwrite=maybe_set_flag(overwrite, yes, no),
+                create_new=maybe_set_flag(create, yes, no),
+                inspect_file=inspect,
+            ).run()
         )
         echo("Success!")
 
@@ -173,13 +195,17 @@ class DatasetController(Controller):
         if overwrite and no_overwrite:
             raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
         client = get(Client)
-        dataset = get_resource(name_or_uuid, project_uuid, "dataset")
-        download_resource(
-            client=client,
-            name=dataset["name"],
-            request=GetDatasetData(dataset["uuid"]),
-            directory=directory,
-            overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite),
+        dataset = get_dataset(name_or_uuid, project_uuid, client)
+
+        client = AsyncClient.from_sync_client(client)
+        asyncio.run(
+            DownloadResource(
+                client=client,
+                directory=directory,
+                name=dataset["name"],
+                request=GetDatasetData(dataset["uuid"]),
+                overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite),
+            ).run()
         )
         echo("Success!")
 
@@ -187,11 +213,14 @@ class DatasetController(Controller):
     @download_options
     def download_multiple(self, project_uuid, directory, overwrite, no_overwrite):
         client = get(Client)
-        download_multiple_dataset_data(
-            client=client,
-            project_uuid=project_uuid,
-            directory=directory,
-            overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite),
+        client = AsyncClient.from_sync_client(client)
+        asyncio.run(
+            DownloadDatasets(
+                {"uuid": project_uuid},
+                client,
+                directory=directory,
+                overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite),
+            ).run()
         )
         echo("Success!")
 
@@ -199,4 +228,10 @@ class DatasetController(Controller):
 def get_dataset_uuid(name_or_uuid, project_uuid, client=None):
     return get_resource_uuid(
         name_or_uuid, request=GetDatasets(project_uuid), resource_type="dataset", client=client
+    )
+
+
+def get_dataset(name_or_uuid, project_uuid, client=None):
+    return get_resource(
+        name_or_uuid, GetDatasets(project_uuid), client=client, resource_type="dataset"
     )
