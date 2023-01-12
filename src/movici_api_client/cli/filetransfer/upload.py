@@ -127,6 +127,42 @@ class UploadResource(Task):
         raise NotImplementedError
 
 
+class UploadMultipleResources(Task):
+    def __init__(
+        self,
+        client: IAsyncClient,
+        directory: pathlib.Path,
+        parent_uuid: str,
+        strategy: UploadStrategy = None,
+        upload_task=UploadResource,
+        **kwargs,
+    ):
+        super().__init__(client)
+        self.directory = directory
+        self.parent_uuid = parent_uuid
+        self.strategy = strategy
+        self.upload_task = upload_task
+        self.kwargs = kwargs
+
+    async def run(self) -> t.Optional[bool]:
+        all_resources = await self.strategy.get_all(self.parent_uuid)
+        async with self.client:
+            for file in tqdm(
+                list(self.strategy.iter_files(self.directory)),
+                desc=f"Processing {self.strategy.resource_type} files",
+            ):
+                task = self.upload_task(
+                    client=self.client,
+                    file=file,
+                    parent_uuid=self.parent_uuid,
+                    all_resources=all_resources,
+                    strategy=self.strategy,
+                    description=file.stem,
+                    **self.kwargs,
+                )
+                await task.run()
+
+
 class UploadDataset(UploadResource):
     def make_strategy(self):
         return DatasetUploadStrategy(self.client)
@@ -192,40 +228,86 @@ class UploadScenario(Task):
         )
 
 
-class UploadMultipleResources(Task):
+class UploadTimeline(Task):
+    extensions = {".json"}
+
     def __init__(
         self,
         client: IAsyncClient,
         directory: pathlib.Path,
         parent_uuid: str,
-        strategy: UploadStrategy = None,
-        upload_task=UploadResource,
-        **kwargs,
+        overwrite,
+        scenario: dict = None,
+        description: str = None,
     ):
-        super().__init__(client)
+        self.client = client
         self.directory = directory
         self.parent_uuid = parent_uuid
-        self.strategy = strategy
-        self.upload_task = upload_task
-        self.kwargs = kwargs
+        self.overwrite = overwrite
+        self.scenario = scenario
+        self.description = description
 
     async def run(self) -> t.Optional[bool]:
-        all_resources = await self.strategy.get_all(self.parent_uuid)
         async with self.client:
-            for file in tqdm(
-                list(self.strategy.iter_files(self.directory)),
-                desc=f"Processing {self.strategy.resource_type} files",
-            ):
-                task = self.upload_task(
-                    client=self.client,
-                    file=file,
-                    parent_uuid=self.parent_uuid,
-                    all_resources=all_resources,
-                    strategy=self.strategy,
-                    description=file.stem,
-                    **self.kwargs,
-                )
-                await task.run()
+            await self.recreate_timeline()
+            await ParallelTaskGroup(
+                (
+                    UploadUpdate(self.client, self.parent_uuid, file)
+                    for file in self.iter_updates()
+                ),
+                progress=True,
+                description=self.description or "Uploading updates",
+            ).run()
+
+    async def recreate_timeline(self):
+        scenario = self.scenario or await self.client.request(GetSingleScenario(self.parent_uuid))
+        if scenario.get("has_timeline"):
+            await self.client.request(DeleteTimeline(self.parent_uuid))
+        await self.client.request(CreateTimeline(self.parent_uuid))
+
+    def iter_updates(self):
+        for file in self.directory.glob("*"):
+            if not file.is_file():
+                continue
+            if self.extensions is not None and file.suffix not in self.extensions:
+                continue
+            yield file
+
+
+class UploadUpdate(Task):
+    def __init__(self, client: IAsyncClient, parent_uuid: str, file: pathlib.Path) -> None:
+        super().__init__(client)
+        self.parent_uuid = parent_uuid
+        self.file = file
+
+    async def run(self) -> t.Optional[bool]:
+        try:
+            payload = self.prepare_payload()
+        except ValueError as e:
+            echo(f"Error reading {self.file}: {e!s}", err=True)
+            return
+        await self.client.request(CreateUpdate(self.parent_uuid, payload))
+
+    def prepare_payload(self) -> t.Optional[dict]:
+        try:
+            contents = read_json_file(self.file)
+        except InvalidFile:
+            raise ValueError("Not a valid update file")
+
+        if {"name", "timestamp", "iteration"} - contents.keys():
+            match = re.match(
+                r"t(?P<timestamp>\d+)_(?P<iteration>\d+)_(?P<dataset>\w+)\..*", self.file.name
+            )
+            if not match:
+                raise ValueError("Could not determine required update info")
+
+            filename_meta = match.groupdict()
+            contents.update(filename_meta)
+        if "data" not in contents:
+            if contents["name"] not in contents:
+                raise ValueError("Could not determine update data")
+            contents["data"] = contents["name"]
+        return contents
 
 
 class UploadStrategy:
@@ -357,88 +439,6 @@ class ScenarioUploadStrategy(UploadStrategy):
         if inspect_file:
             payload["name"] = name
         return payload
-
-
-class UploadTimeline(Task):
-    extensions = {".json"}
-
-    def __init__(
-        self,
-        client: IAsyncClient,
-        directory: pathlib.Path,
-        parent_uuid: str,
-        overwrite,
-        scenario: dict = None,
-        description: str = None,
-    ):
-        self.client = client
-        self.directory = directory
-        self.parent_uuid = parent_uuid
-        self.overwrite = overwrite
-        self.scenario = scenario
-        self.description = description
-
-    async def run(self) -> t.Optional[bool]:
-        async with self.client:
-            await self.recreate_timeline()
-            await ParallelTaskGroup(
-                (
-                    UploadUpdate(self.client, self.parent_uuid, file)
-                    for file in self.iter_updates()
-                ),
-                progress=True,
-                description=self.description or "Uploading updates",
-            ).run()
-
-    async def recreate_timeline(self):
-        scenario = self.scenario or await self.client.request(GetSingleScenario(self.parent_uuid))
-        if scenario.get("has_timeline"):
-            await self.client.request(DeleteTimeline(self.parent_uuid))
-        await self.client.request(CreateTimeline(self.parent_uuid))
-
-    def iter_updates(self):
-        for file in self.directory.glob("*"):
-            if not file.is_file():
-                continue
-            if self.extensions is not None and file.suffix not in self.extensions:
-                continue
-            yield file
-
-
-class UploadUpdate(Task):
-    def __init__(self, client: IAsyncClient, parent_uuid: str, file: pathlib.Path) -> None:
-        super().__init__(client)
-        self.parent_uuid = parent_uuid
-        self.file = file
-
-    async def run(self) -> t.Optional[bool]:
-        try:
-            payload = self.prepare_payload()
-        except ValueError as e:
-            echo(f"Error reading {self.file}: {e!s}", err=True)
-            return
-        await self.client.request(CreateUpdate(self.parent_uuid, payload))
-
-    def prepare_payload(self) -> t.Optional[dict]:
-        try:
-            contents = read_json_file(self.file)
-        except InvalidFile:
-            raise ValueError("Not a valid update file")
-
-        if {"name", "timestamp", "iteration"} - contents.keys():
-            match = re.match(
-                r"t(?P<timestamp>\d+)_(?P<iteration>\d+)_(?P<dataset>\w+)\..*", self.file.name
-            )
-            if not match:
-                raise ValueError("Could not determine required update info")
-
-            filename_meta = match.groupdict()
-            contents.update(filename_meta)
-        if "data" not in contents:
-            if contents["name"] not in contents:
-                raise ValueError("Could not determine update data")
-            contents["data"] = contents["name"]
-        return contents
 
 
 @contextlib.contextmanager
