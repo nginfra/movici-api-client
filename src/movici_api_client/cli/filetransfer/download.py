@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import pathlib
 import shutil
 import typing as t
@@ -16,7 +17,9 @@ from movici_api_client.api.requests import (
     GetSingleScenario,
     GetSingleUpdate,
     GetUpdates,
+    GetViews,
 )
+from movici_api_client.cli.data_dir import DataDir
 
 from ..exceptions import InvalidFile
 from ..utils import echo
@@ -39,31 +42,23 @@ class DownloadResource(Task):
     def __init__(
         self,
         client: AsyncClient,
-        directory: pathlib.Path,
-        name: str,
+        file: pathlib.Path,
         request: Request,
         overwrite: t.Optional[bool] = None,
         progress=True,
-        infer_extension=True,
         continue_after_failed_overwrite=False,
     ) -> None:
         super().__init__(client)
-        self.directory = directory
-        self.name = name
+        self.file = file
         self.request = request
         self.overwrite = overwrite
         self.progress = progress
-        self.infer_extension = infer_extension
         self.continue_after_failed_overwrite = continue_after_failed_overwrite
 
     async def run(self):
-        file = self.directory.joinpath(self.name)
-        return await self.download_as_file(file=file)
-
-    async def download_as_file(self, file: pathlib.Path) -> bool:
         async with self.client.stream(self.request) as response:
-            file = self.file_with_suffix(file, response)
-            if not self.prepare_overwrite_file(file, self.overwrite):
+            file = self.file_with_suffix(response)
+            if not prepare_overwrite_file(file, self.overwrite):
                 return self.continue_after_failed_overwrite
             fopen = open(file, "wb")
             if self.progress:
@@ -82,11 +77,16 @@ class DownloadResource(Task):
                     fout.write(chunk)
         return True
 
+    def file_with_suffix(self, response):
+        return self.file.with_suffix(
+            self.EXTENSIONS.get(response.headers.get("content-type"), ".dat")
+        )
+
     @staticmethod
     def prepare_overwrite_file(file: pathlib.Path, overwrite: t.Optional[bool] = None):
         if file.exists():
             overwrite = resolve_question_flag(
-                overwrite, f"File {file!s} already exists, overwrite?"
+                overwrite, f"File {file.name!s} already exists, overwrite?"
             )
             if not file.is_file():
                 raise InvalidFile(msg="not a file", file=file)
@@ -99,13 +99,6 @@ class DownloadResource(Task):
                 return False
             parent.mkdir(parents=True, exist_ok=True)
         return True
-
-    def file_with_suffix(self, file, response):
-        if self.infer_extension:
-            file = file.with_suffix(
-                self.EXTENSIONS.get(response.headers.get("content-type"), ".dat")
-            )
-        return file
 
     @staticmethod
     def infer_file_size(response):
@@ -120,7 +113,7 @@ class RecursivelyDownloadResource(Task):
         self,
         parent: dict,
         client: AsyncClient,
-        directory: pathlib.Path,
+        directory: DataDir,
         overwrite: t.Optional[bool] = None,
         progress=True,
         cli_params: t.Optional[dict] = None,
@@ -156,8 +149,7 @@ class DownloadDatasets(RecursivelyDownloadResource):
         yield from (
             DownloadResource(
                 client=self.client,
-                directory=self.directory,
-                name=ds["name"],
+                file=self.directory.datasets.joinpath(ds["name"]),
                 request=GetDatasetData(ds["uuid"]),
                 overwrite=self.overwrite,
                 progress=self.progress,
@@ -196,21 +188,21 @@ class DownloadSingleScenario(RecursivelyDownloadResource):
         name, uuid = self.parent["name"], self.parent["uuid"]
         yield DownloadResource(
             client=self.client,
-            directory=self.directory,
-            name=name,
+            file=self.directory.scenarios.joinpath(name),
             request=GetSingleScenario(uuid),
             overwrite=self.overwrite,
             progress=False,
         )
         if self.should_download_updates():
-            directory = self.directory.joinpath(name)
-            yield PrepareOverwriteDirectory(directory, overwrite=self.overwrite)
+            simulation_dir = self.directory.ensure_simulation_dir(name)
+            yield PrepareOverwriteDirectory(simulation_dir, overwrite=self.overwrite)
             yield ParallelTaskGroup(
                 (
                     DownloadResource(
                         client=self.client,
-                        directory=directory,
-                        name=f"t{r['timestamp']}_{r['iteration']}_{r['name']}",
+                        file=simulation_dir.joinpath(
+                            f"t{r['timestamp']}_{r['iteration']}_{r['name']}"
+                        ),
                         request=GetSingleUpdate(r["uuid"]),
                         overwrite=self.overwrite,
                         progress=False,
@@ -220,9 +212,47 @@ class DownloadSingleScenario(RecursivelyDownloadResource):
                 progress=self.progress,
                 description=name,
             )
+        if self.should_download_views():
+            yield DownloadViews(
+                client=self.client,
+                scenario=self.parent,
+                directory=self.directory,
+                overwrite=self.overwrite,
+            )
 
     def should_download_updates(self):
         return self.cli_params.get("with_simulation", False)
+
+    def should_download_views(self):
+        return self.cli_params.get("with_views", False)
+
+
+class DownloadViews(Task):
+    def __init__(
+        self,
+        client: AsyncClient,
+        scenario: dict,
+        directory: DataDir,
+        overwrite: t.Optional[bool] = None,
+    ) -> None:
+        self.client = client
+        self.scenario = scenario
+        self.directory = directory
+        self.overwrite = overwrite
+
+    async def run(self) -> t.Optional[bool]:
+        async with self.client:
+            views = await self.client.request(GetViews(self.scenario["uuid"]))
+        directory = self.directory.ensure_views_dir(self.scenario["name"])
+        for view in views:
+            self.store_view(view, directory=directory)
+
+    def store_view(self, view: dict, directory: pathlib.Path):
+        name = view["name"]
+        file = directory.joinpath(name).with_suffix(".json")
+        if not prepare_overwrite_file(file, self.overwrite):
+            return
+        file.write_text(json.dumps(view, indent=2))
 
 
 class PrepareOverwriteDirectory(Task):
@@ -253,3 +283,21 @@ class PrepareOverwriteDirectory(Task):
         shutil.rmtree(self.directory)
         self.directory.mkdir()
         return True
+
+
+def prepare_overwrite_file(file: pathlib.Path, overwrite: t.Optional[bool] = None):
+    if file.exists():
+        overwrite = resolve_question_flag(
+            overwrite, f"File {file.name!s} already exists, overwrite?"
+        )
+        if not file.is_file():
+            raise InvalidFile(msg="not a file", file=file)
+        if not overwrite:
+            echo(f"Cowardly refusing to overwrite existing file {file.name}")
+            return False
+    if not (parent := file.parent).is_dir():
+        if parent.exists():
+            echo(f"{parent!s} is not a valid directory")
+            return False
+        parent.mkdir(parents=True, exist_ok=True)
+    return True

@@ -12,6 +12,7 @@ from movici_api_client.api.requests import (
     GetSingleDataset,
     UpdateDataset,
 )
+from movici_api_client.cli.filetransfer.upload import UploadResource
 
 from ..common import Controller
 from ..decorators import (
@@ -26,25 +27,16 @@ from ..decorators import (
     valid_project_uuid,
 )
 from ..dependencies import get
-from ..exceptions import InvalidUsage
+from ..exceptions import InvalidUsage, NoChangeDetected
 from ..filetransfer import (
     DatasetUploadStrategy,
     DownloadDatasets,
     DownloadResource,
-    UploadDataset,
     UploadMultipleResources,
 )
-from ..utils import (
-    DirPath,
-    FilePath,
-    confirm,
-    echo,
-    get_resource,
-    get_resource_uuid,
-    maybe_set_flag,
-    prompt,
-    prompt_choices,
-)
+from ..helpers import edit_resource
+from ..utils import DirPath, FilePath, confirm, echo, maybe_set_flag, prompt, prompt_choices
+from .common import get_dataset, get_dataset_uuid, resolve_data_directory
 
 
 def upload_dataset_options(func):
@@ -121,6 +113,8 @@ class DatasetController(Controller):
     def update(self, project_uuid, name_or_uuid, name, display_name, type):
         client = get(Client)
         uuid = get_dataset_uuid(name_or_uuid, project_uuid, client=client)
+        if not any((name, type, display_name)):
+            raise NoChangeDetected()
         return client.request(UpdateDataset(uuid, name=name, type=type, display_name=display_name))
 
     @command
@@ -153,10 +147,11 @@ class DatasetController(Controller):
         name_or_uuid = name_or_uuid or file.stem
         client = AsyncClient.from_sync_client(get(Client))
         asyncio.run(
-            UploadDataset(
+            UploadResource(
                 client,
                 file,
                 parent_uuid=project_uuid,
+                strategy=DatasetUploadStrategy(client),
                 name_or_uuid=name_or_uuid,
                 overwrite=maybe_set_flag(overwrite, yes, no),
                 create_new=maybe_set_flag(create, yes, no),
@@ -167,7 +162,13 @@ class DatasetController(Controller):
         echo("Success!")
 
     @command(name="datasets", group="upload")
-    @option("-d", "--directory", type=DirPath(), default=pathlib.Path("."))
+    @option(
+        "-d",
+        "--directory",
+        type=DirPath(writable=True),
+        default=None,
+        callback=lambda _, __, path: resolve_data_directory(path, "datasets"),
+    )
     @upload_dataset_options
     def upload_multiple(self, project_uuid, directory, overwrite, create, yes, no, inspect):
         if yes and no:
@@ -190,7 +191,7 @@ class DatasetController(Controller):
 
     @command
     @argument("name_or_uuid")
-    @download_options
+    @download_options(purpose="datasets")
     def download(self, project_uuid, name_or_uuid, directory, overwrite, no_overwrite):
         if overwrite and no_overwrite:
             raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
@@ -210,8 +211,10 @@ class DatasetController(Controller):
         echo("Success!")
 
     @command(name="datasets", group="download")
-    @download_options
+    @download_options(purpose="datasets")
     def download_multiple(self, project_uuid, directory, overwrite, no_overwrite):
+        if overwrite and no_overwrite:
+            raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
         client = get(Client)
         client = AsyncClient.from_sync_client(client)
         asyncio.run(
@@ -224,14 +227,12 @@ class DatasetController(Controller):
         )
         echo("Success!")
 
-
-def get_dataset_uuid(name_or_uuid, project_uuid, client=None):
-    return get_resource_uuid(
-        name_or_uuid, request=GetDatasets(project_uuid), resource_type="dataset", client=client
-    )
-
-
-def get_dataset(name_or_uuid, project_uuid, client=None):
-    return get_resource(
-        name_or_uuid, GetDatasets(project_uuid), client=client, resource_type="dataset"
-    )
+    @command
+    @argument("name_or_uuid")
+    def edit(self, project_uuid, name_or_uuid):
+        client = get(Client)
+        uuid = get_dataset_uuid(name_or_uuid, project_uuid, client=client)
+        current = client.request(GetSingleDataset(uuid))
+        result = edit_resource(current)
+        client.request(UpdateDataset(uuid, payload=result))
+        echo("Succesfully updated dataset")

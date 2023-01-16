@@ -2,7 +2,6 @@ import dataclasses
 import pathlib
 
 
-@dataclasses.dataclass
 class MoviciCLIError(Exception):
     template: str = dataclasses.field(init=False, default=None)
 
@@ -10,6 +9,20 @@ class MoviciCLIError(Exception):
         if self.template is None:
             return type(self).__name__
         return self.template.format(**dataclasses.asdict(self))
+
+
+@dataclasses.dataclass
+class CustomError(MoviciCLIError):
+    msg: str
+    template = "{msg}"
+
+
+@dataclasses.dataclass
+class InvalidDirectory(MoviciCLIError):
+    msg: str
+    dir: pathlib.Path
+
+    template = "Invalid directory [{msg}]: {dir!s}"
 
 
 @dataclasses.dataclass
@@ -79,3 +92,17 @@ class NotYetImplemented(MoviciCLIError):
 class InvalidUsage(MoviciCLIError):
     msg: str
     template = "Invalid usage: {msg}"
+
+
+class InvalidFileEdit(MoviciCLIError):
+    template = "Your edit was invalid"
+
+
+class NoChangeDetected(MoviciCLIError):
+    template = "No change detected"
+
+
+@dataclasses.dataclass
+class InvalidEditor(MoviciCLIError):
+    editor: str
+    template = "Invalid editor {editor}. Please set the EDITOR environment setting"

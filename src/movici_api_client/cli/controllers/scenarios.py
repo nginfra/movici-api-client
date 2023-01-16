@@ -13,14 +13,7 @@ from movici_api_client.api.requests import (
     GetSimulation,
     GetSingleScenario,
     RunSimulation,
-)
-from movici_api_client.cli.filetransfer import (
-    DownloadScenarios,
-    DownloadSingleScenario,
-    ScenarioUploadStrategy,
-    UploadMultipleResources,
-    UploadScenario,
-    resolve_question_flag,
+    UpdateScenario,
 )
 
 from ..common import Controller
@@ -36,18 +29,18 @@ from ..decorators import (
     valid_project_uuid,
 )
 from ..dependencies import get
-from ..exceptions import InvalidUsage, NotYetImplemented
-from ..utils import (
-    Choice,
-    DirPath,
-    FilePath,
-    confirm,
-    echo,
-    get_resource,
-    get_resource_uuid,
-    maybe_set_flag,
-    prompt,
+from ..exceptions import InvalidUsage
+from ..filetransfer import (
+    DownloadScenarios,
+    DownloadSingleScenario,
+    ScenarioUploadStrategy,
+    UploadMultipleResources,
+    UploadScenario,
+    resolve_question_flag,
 )
+from ..helpers import edit_resource
+from ..utils import Choice, DirPath, FilePath, confirm, echo, maybe_set_flag, prompt
+from .common import get_scenario, get_scenario_uuid, resolve_data_directory
 
 
 def upload_scenario_options(func):
@@ -132,11 +125,6 @@ class ScenarioController(Controller):
             "datasets": [],
         }
         return client.request(CreateScenario(project_uuid, payload=payload))
-
-    @command
-    @format_output
-    def update(self, project_uuid, name_or_uuid, name, display_name, type):
-        raise NotYetImplemented()
 
     @command
     @argument("name_or_uuid")
@@ -235,7 +223,13 @@ class ScenarioController(Controller):
         echo("Success!")
 
     @command(name="scenarios", group="upload")
-    @option("-d", "--directory", type=DirPath(), required=True)
+    @option(
+        "-d",
+        "--directory",
+        type=DirPath(writable=True),
+        default=None,
+        callback=lambda _, __, path: resolve_data_directory(path, "scenarios"),
+    )
     @upload_scenario_options
     def upload_multiple(
         self, project_uuid, directory, overwrite, create, yes, no, inspect, **kwargs
@@ -261,8 +255,9 @@ class ScenarioController(Controller):
 
     @command
     @argument("name_or_uuid")
-    @download_options
-    @option("-s", "--with-simulation", is_flag=True)
+    @download_options(purpose="scenarios")
+    @option("--with-simulation", is_flag=True)
+    @option("--with-views", is_flag=True)
     def download(self, project_uuid, name_or_uuid, directory, overwrite, no_overwrite, **kwargs):
         if overwrite and no_overwrite:
             raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
@@ -282,8 +277,9 @@ class ScenarioController(Controller):
         echo("Success!")
 
     @command(name="scenarios", group="download")
-    @download_options
-    @option("-s", "--with-simulation", is_flag=True)
+    @download_options(purpose="scenarios")
+    @option("--with-simulation", is_flag=True)
+    @option("--with-views", is_flag=True)
     def download_multiple(self, project_uuid, directory, overwrite, no_overwrite, **kwargs):
         if overwrite and no_overwrite:
             raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
@@ -301,6 +297,16 @@ class ScenarioController(Controller):
         )
         echo("Success!")
 
+    @command
+    @argument("name_or_uuid")
+    def edit(self, project_uuid, name_or_uuid):
+        client = get(Client)
+        uuid = get_scenario_uuid(name_or_uuid, project_uuid, client=client)
+        current = client.request(GetSingleScenario(uuid))
+        result = edit_resource(current)
+        client.request(UpdateScenario(uuid, result))
+        echo("Succesfully updated scenario")
+
 
 def wait_until_simulation_is_reset(uuid, interval=1, client=None):
     client = client or get(Client)
@@ -315,15 +321,3 @@ def wait_until_simulation_is_reset(uuid, interval=1, client=None):
     while has_simulation:
         client.request(GetSimulation(uuid), on_error=on_error)
         time.sleep(interval)
-
-
-def get_scenario_uuid(name_or_uuid, project_uuid, client=None):
-    return get_resource_uuid(
-        name_or_uuid, request=GetScenarios(project_uuid), resource_type="scenario", client=client
-    )
-
-
-def get_scenario(name_or_uuid, project_uuid, client=None):
-    return get_resource(
-        name_or_uuid, GetScenarios(project_uuid), client=client, resource_type="scenario"
-    )

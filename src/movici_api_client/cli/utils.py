@@ -91,32 +91,20 @@ def get_resource_uuid(name_or_uuid, request, resource_type="resource", client=No
 def get_resource(name_or_uuid, request, client=None, resource_type="resource"):
     client = client or dependencies.get(Client)
     all_resources = client.request(request)
+    return get_resource_from_list(name_or_uuid, all_resources, resource_type=resource_type)
+
+
+def get_project_uuids():
+    return get_resource_uuids(GetProjects())
+
+
+def get_resource_from_list(name_or_uuid, all_resources, resource_type="resource"):
     match_field = "uuid" if validate_uuid(name_or_uuid) else "name"
     for res in all_resources:
         if name_or_uuid == res[match_field]:
             return res
     else:
         raise InvalidResource(resource_type, name_or_uuid)
-
-
-def get_resource_name_and_uuid(name_or_uuid, request, client=None, resource_type="resource"):
-    client = client or dependencies.get(Client)
-    all_resources = client.request(request)
-
-    try:
-        if validate_uuid(name_or_uuid):
-            uuid = name_or_uuid
-            name = next(d["name"] for d in all_resources if d["uuid"] == uuid)
-        else:
-            name = name_or_uuid
-            uuid = next(d["uuid"] for d in all_resources if d["name"] == name)
-    except StopIteration:
-        raise InvalidResource("dataset", name_or_uuid)
-    return name, uuid
-
-
-def get_project_uuids():
-    return get_resource_uuids(GetProjects())
 
 
 def handle_movici_error(e: MoviciCLIError):

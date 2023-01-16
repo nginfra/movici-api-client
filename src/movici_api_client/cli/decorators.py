@@ -1,9 +1,9 @@
 import functools
-import pathlib
 import typing as t
 
 from movici_api_client.api import Client, Response
 from movici_api_client.api.requests import CheckAuthToken
+from movici_api_client.cli.controllers.common import resolve_data_directory
 
 from . import dependencies
 from .common import OPTIONS_COMMAND, get_options, has_options, set_options
@@ -137,14 +137,25 @@ def upload_options(func):
     )(func)
 
 
-def download_options(func):
-    return combine_decorators(
-        [
-            option("-d", "--directory", type=DirPath(writable=True), default=pathlib.Path(".")),
-            option("-o", "-y", "--overwrite", is_flag=True, help="Always overwrite"),
-            option("-n", "--no-overwrite", is_flag=True, help="Never overwrite"),
-        ]
-    )(func)
+def download_options(
+    purpose: t.Literal["datasets", "scenarios", "updates", "views"],
+):
+    def decorator(func):
+        return combine_decorators(
+            [
+                option(
+                    "-d",
+                    "--directory",
+                    type=DirPath(writable=True),
+                    default=None,
+                    callback=lambda _, __, path: resolve_data_directory(path, purpose),
+                ),
+                option("-o", "-y", "--overwrite", is_flag=True, help="Always overwrite"),
+                option("-n", "--no-overwrite", is_flag=True, help="Never overwrite"),
+            ]
+        )(func)
+
+    return decorator
 
 
 def combine_decorators(decorators: t.Iterable[callable]):

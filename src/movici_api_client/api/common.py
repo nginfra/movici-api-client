@@ -190,4 +190,11 @@ def urljoin(*parts):
 
 
 def pick(obj, attrs: t.List[str], default=None):
-    return {key: getattr(obj, key, default) for key in attrs}
+    # TODO: work with dictionaries as well as getattr
+    def _get_item_or_attr(obj, key):
+        try:
+            return obj[key]
+        except (KeyError, TypeError):
+            return getattr(obj, key, default)
+
+    return {key: _get_item_or_attr(obj, key) for key in attrs}

@@ -6,7 +6,7 @@ import typing as t
 from asyncio import Semaphore
 
 import httpx
-from httpx import HTTPError, Response  # noqa
+from httpx import HTTPError, Response, Timeout  # noqa
 
 from .common import (
     Auth,
@@ -20,6 +20,8 @@ from .common import (
 
 T = t.TypeVar("T")
 
+DEFAULT_TIMEOUT_CONFIG = Timeout(timeout=5.0)
+
 
 class Client(BaseClient, ISyncClient):
     def __init__(
@@ -32,7 +34,8 @@ class Client(BaseClient, ISyncClient):
         service_urls: t.Optional[t.Dict[Service, str]] = None,
     ):
         super().__init__(base_url, auth, logger, on_error, service_urls)
-        self.client = client or httpx.Client()
+        self.client = client or httpx.Client(timeout=DEFAULT_TIMEOUT_CONFIG)
+        self.timeout = self.client.timeout
 
     def request(
         self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None
@@ -63,17 +66,18 @@ class AsyncClient(BaseClient, IAsyncClient):
         on_error: t.Optional[ErrorCallback] = None,
         service_urls: t.Optional[t.Dict[Service, str]] = None,
         max_concurrent=10,
+        timeout=DEFAULT_TIMEOUT_CONFIG,
     ):
         super().__init__(base_url, auth, logger, on_error, service_urls)
         self.client_factory = client_factory
         self.client = None
         self.concurrent_requests = Semaphore(max_concurrent)
         self.enter_count = 0
+        self.timeout = timeout
 
     async def request(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
         async with self.concurrent_requests:
-            if self.client is None:
-                self.client = self.client_factory()
+            self._ensure_client()
             self._assert_auth(req)
             conf = self._prepare_request_config(req)
 
@@ -85,12 +89,16 @@ class AsyncClient(BaseClient, IAsyncClient):
     @contextlib.asynccontextmanager
     async def stream(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
         async with self.concurrent_requests:
-            if self.client is None:
-                self.client = self.client_factory()
+            self._ensure_client()
             conf = self._prepare_request_config(req)
             async with self.client.stream(**conf) as resp:
                 self._handle_failure(resp, on_error)
                 yield resp
+
+    def _ensure_client(self):
+        if self.client is None:
+            self.client = self.client_factory(timeout=self.timeout)
+        return self.client
 
     async def close(self):
         if self.client is None:
@@ -118,4 +126,5 @@ class AsyncClient(BaseClient, IAsyncClient):
             logger=client.logger,
             on_error=client.on_error,
             service_urls=client.service_urls,
+            timeout=client.timeout,
         )

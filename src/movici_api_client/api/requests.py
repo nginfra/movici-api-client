@@ -3,8 +3,6 @@ import io
 import pathlib
 import typing as t
 
-import httpx
-
 from .common import Request, Service, pick, simple_request, unwrap_envelope, urljoin
 
 
@@ -141,6 +139,7 @@ class CreateDataset(DataEngineRequest):
 @dataclasses.dataclass
 class UpdateDataset(DataEngineRequest):
     uuid: str
+    payload: t.Optional[dict] = None
     name: t.Optional[str] = None
     type: t.Optional[str] = None
     display_name: t.Optional[str] = None
@@ -149,11 +148,15 @@ class UpdateDataset(DataEngineRequest):
         return {
             "method": "PUT",
             "url": urljoin("datasets", self.uuid),
-            "json": {
-                k: v
-                for k, v in pick(self, ("name", "type", "display_name")).items()
-                if v is not None
-            },
+            "json": self.prepare_payload(),
+        }
+
+    def prepare_payload(self):
+        payload = self.payload if self.payload is not None else self
+        return {
+            k: v
+            for k, v in pick(payload, ("name", "type", "display_name")).items()
+            if v is not None
         }
 
 
@@ -190,7 +193,6 @@ class AddDatasetData(DataEngineRequest):
             "files": {
                 "data": file,
             },
-            "timeout": httpx.Timeout(10.0, read=60.0),
         }
 
 
@@ -351,6 +353,62 @@ class CreateUpdate(DataEngineRequest):
             "method": "POST",
             "url": urljoin("scenarios", self.scenario_uuid, "updates"),
             "json": self.payload,
+        }
+
+
+@dataclasses.dataclass
+@unwrap_envelope("views")
+class GetViews(DataEngineRequest):
+    scenario_uuid: str
+
+    @simple_request
+    def make_request(self):
+        return urljoin("scenarios", self.scenario_uuid, "views")
+
+
+@dataclasses.dataclass
+class GetSingleView(DataEngineRequest):
+    view_uuid: str
+
+    @simple_request
+    def make_request(self):
+        return urljoin("views", self.view_uuid)
+
+
+@dataclasses.dataclass
+class CreateView(DataEngineRequest):
+    scenario_uuid: str
+    payload: dict
+
+    def make_request(self):
+        return {
+            "method": "POST",
+            "url": urljoin("scenarios", self.scenario_uuid, "views"),
+            "json": self.payload,
+        }
+
+
+@dataclasses.dataclass
+class UpdateView(DataEngineRequest):
+    view_uuid: str
+    payload: dict
+
+    def make_request(self):
+        return {
+            "method": "PUT",
+            "url": urljoin("views", self.view_uuid),
+            "json": self.payload,
+        }
+
+
+@dataclasses.dataclass
+class DeleteView(DataEngineRequest):
+    view_uuid: str
+
+    def make_request(self):
+        return {
+            "method": "DELETE",
+            "url": urljoin("views", self.view_uuid),
         }
 
 

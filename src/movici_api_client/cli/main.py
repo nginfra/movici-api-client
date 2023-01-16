@@ -1,7 +1,11 @@
+import pathlib
 from json import JSONDecodeError
+
+import httpx
 
 from movici_api_client.api import Client, HTTPError, MoviciTokenAuth, Response
 from movici_api_client.api.common import parse_service_urls
+from movici_api_client.cli.data_dir import MoviciDataDir
 from movici_api_client.cli.exceptions import InvalidResource
 
 from . import dependencies
@@ -10,6 +14,7 @@ from .controllers.login import LoginController
 from .decorators import argument, authenticated, command, option
 from .utils import (
     Abort,
+    PathType,
     assert_context,
     assert_current_context,
     echo,
@@ -33,6 +38,7 @@ def main(project_override):
         auth=auth,
         on_error=handle_http_error,
         service_urls=parse_service_urls(context, prefix="service."),
+        client=httpx.Client(timeout=httpx.Timeout(10.0, read=60.0)),
     )
     dependencies.set(client)
 
@@ -84,3 +90,10 @@ def activate_project(project):
     context["project"] = project
     write_config(config)
     echo(f"Project {project} succefully activated!")
+
+
+@command(name="initialize-data-dir")
+@argument("directory", type=PathType(), default=pathlib.Path("."))
+def initialize_data_dir(directory):
+    MoviciDataDir.initialize(pathlib.Path(directory))
+    echo("Succesfully initialized movici data directory")

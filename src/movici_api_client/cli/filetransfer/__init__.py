@@ -10,7 +10,6 @@ from .upload import (
     DatasetUploadStrategy,
     ScenarioUploadStrategy,
     UpdateScenario,
-    UploadDataset,
     UploadMultipleResources,
     UploadResource,
     UploadScenario,

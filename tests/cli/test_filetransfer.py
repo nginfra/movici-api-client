@@ -76,7 +76,9 @@ class TestUploadResource:
     @pytest.mark.asyncio
     async def test_create_new_can_override_name(self, make_task, strategy, upload_file):
         strategy.get_all.return_value = []
-        task = make_task(overwrite=False, create_new=True, inspect_file=False, name="alternative")
+        task = make_task(
+            overwrite=False, create_new=True, inspect_file=False, name_or_uuid="alternative"
+        )
         await task.run()
         assert strategy.create_new.await_args == call(
             task.parent_uuid, file=upload_file, name="alternative", inspect_file=False
@@ -170,18 +172,3 @@ class TestDatasetUploadStrategy:
         ) as prompt:
             prompt.return_value = self.prompt_sentinel
             assert await strategy.infer_dataset_type(file, inspect) == expected_value
-
-    @pytest.mark.parametrize(
-        "extensions,files,result",
-        [
-            (None, ["a.json", "b.csv", "c.png"], ["a.json", "b.csv", "c.png"]),
-            ((".json", ".csv"), ["a.json", "b.csv", "c.png"], ["a.json", "b.csv"]),
-        ],
-    )
-    def test_iter_dataset_files(self, extensions, files, result, add_dataset, data_dir):
-        strategy = DatasetUploadStrategy(None)
-        strategy.extensions = extensions
-
-        for file in files:
-            add_dataset(file)
-        assert set(f.name for f in strategy.iter_files(data_dir)) == set(result)
