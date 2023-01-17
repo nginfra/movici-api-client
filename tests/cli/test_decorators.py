@@ -3,7 +3,7 @@ from unittest.mock import call, patch
 import pytest
 
 from movici_api_client.api.requests import CheckAuthToken
-from movici_api_client.cli import decorators
+from movici_api_client.cli import decorators, dependencies
 from movici_api_client.cli.decorators import authenticated, catch_exceptions
 from movici_api_client.cli.exceptions import MoviciCLIError, Unauthenticated
 from movici_api_client.cli.testing import FakeClient
@@ -30,6 +30,10 @@ class TestCatchExceptions:
 
 
 class TestAuthenticated:
+    @pytest.fixture(autouse=True)
+    def config(self, read_config):
+        dependencies.set(read_config())
+
     def test_authenticated_requests_authentication(self, client: FakeClient):
         @authenticated
         def test_func():

@@ -3,40 +3,44 @@ from __future__ import annotations
 import contextlib
 import logging
 import typing as t
+from asyncio import Semaphore
 
 import httpx
-from httpx import Response  # do not remove, this is exported to consumers
+from httpx import HTTPError, Response, Timeout  # noqa
 
-from .common import Auth, BaseApi, BaseRequest
+from .common import (
+    Auth,
+    BaseClient,
+    BaseRequest,
+    ErrorCallback,
+    IAsyncClient,
+    ISyncClient,
+    Service,
+)
 
 T = t.TypeVar("T")
 
-ErrorCallback = t.Callable[[httpx.Response], bool]
+DEFAULT_TIMEOUT_CONFIG = Timeout(timeout=5.0)
 
 
-class Client(BaseApi):
+class Client(BaseClient, ISyncClient):
     def __init__(
         self,
         base_url: str,
-        auth: t.Optional[Auth] = None,
+        auth: t.Union[Auth, None, False] = None,
         client: t.Optional[httpx.Client] = None,
         logger: t.Optional[logging.Logger] = None,
         on_error: t.Optional[ErrorCallback] = None,
+        service_urls: t.Optional[t.Dict[Service, str]] = None,
     ):
-        self.base_url = base_url
-        self.auth = auth
-        self.client = client or httpx.Client()
-        self.logger = logger
-        self.on_error = on_error
+        super().__init__(base_url, auth, logger, on_error, service_urls)
+        self.client = client or httpx.Client(timeout=DEFAULT_TIMEOUT_CONFIG)
+        self.timeout = self.client.timeout
 
     def request(
         self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None
     ) -> t.Optional[T]:
-        if req.auth:
-            if self.auth is None:
-                raise ValueError(
-                    "request is authenticated, but no authenticationprovider configured"
-                )
+        self._assert_auth(req)
         conf = self._prepare_request_config(req)
         resp = self.client.request(**conf)
         self._handle_failure(resp, on_error)
@@ -46,31 +50,80 @@ class Client(BaseApi):
     def stream(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
         conf = self._prepare_request_config(req)
         with self.client.stream(**conf) as resp:
-            self._handle_failure(resp)
+            self._handle_failure(resp, on_error)
             yield resp
 
-    def _prepare_request_config(self, req: BaseRequest[T]):
-        conf = req.generate_config(self)
-        conf = self.auth(conf)
-        if self.logger:
-            self.logger.debug(str(conf))
-        return conf
 
-    def _handle_failure(self, resp: Response, on_error: t.Optional[ErrorCallback] = None):
-        if resp.status_code >= 400:
-            run_global_error_callback = True
-            if on_error:
-                # a "local" error callback can return False to indicate that all error handling
-                # has been completed and the global error handling should not take place. We need
-                # to specifcally look for False and not just Falsy (ie: None)
-                run_global_error_callback = on_error(resp) is not False
-            if not run_global_error_callback:
-                return
-            if self.on_error:
-                self.on_error(resp)
-            else:
-                resp.raise_for_status()
+class AsyncClient(BaseClient, IAsyncClient):
+    client: t.Optional[httpx.AsyncClient]
 
+    def __init__(
+        self,
+        base_url: str,
+        auth: t.Union[Auth, None, False] = None,
+        client_factory: t.Type[httpx.AsyncClient] = httpx.AsyncClient,
+        logger: t.Optional[logging.Logger] = None,
+        on_error: t.Optional[ErrorCallback] = None,
+        service_urls: t.Optional[t.Dict[Service, str]] = None,
+        max_concurrent=10,
+        timeout=DEFAULT_TIMEOUT_CONFIG,
+    ):
+        super().__init__(base_url, auth, logger, on_error, service_urls)
+        self.client_factory = client_factory
+        self.client = None
+        self.concurrent_requests = Semaphore(max_concurrent)
+        self.enter_count = 0
+        self.timeout = timeout
 
-class AsyncClient(BaseApi):
-    ...
+    async def request(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
+        async with self.concurrent_requests:
+            self._ensure_client()
+            self._assert_auth(req)
+            conf = self._prepare_request_config(req)
+            resp = await self.client.request(**conf)
+
+            self._handle_failure(resp, on_error)
+            return req.make_response(resp)
+
+    @contextlib.asynccontextmanager
+    async def stream(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
+        async with self.concurrent_requests:
+            self._ensure_client()
+            conf = self._prepare_request_config(req)
+            async with self.client.stream(**conf) as resp:
+                self._handle_failure(resp, on_error)
+                yield resp
+
+    def _ensure_client(self):
+        if self.client is None:
+            self.client = self.client_factory(timeout=self.timeout)
+        return self.client
+
+    async def close(self):
+        if self.client is None:
+            return
+
+        await self.client.aclose()
+        self.client = None
+
+    async def __aenter__(self):
+        if self.client is None:
+            self.client = self.client_factory()
+        self.enter_count += 1
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.enter_count -= 1
+        if self.enter_count <= 0:
+            await self.close()
+
+    @classmethod
+    def from_sync_client(cls, client: Client):
+        return AsyncClient(
+            base_url=client.base_url,
+            auth=client.auth,
+            logger=client.logger,
+            on_error=client.on_error,
+            service_urls=client.service_urls,
+            timeout=client.timeout,
+        )

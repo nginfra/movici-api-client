@@ -1,6 +1,11 @@
+import pathlib
 from json import JSONDecodeError
 
-from movici_api_client.api import Client, MoviciTokenAuth, Response
+import httpx
+
+from movici_api_client.api import Client, HTTPError, MoviciTokenAuth, Response
+from movici_api_client.api.common import parse_service_urls
+from movici_api_client.cli.data_dir import MoviciDataDir
 from movici_api_client.cli.exceptions import InvalidResource
 
 from . import dependencies
@@ -9,6 +14,7 @@ from .controllers.login import LoginController
 from .decorators import argument, authenticated, command, option
 from .utils import (
     Abort,
+    PathType,
     assert_context,
     assert_current_context,
     echo,
@@ -25,15 +31,19 @@ def main(project_override):
     if not (context := config.current_context):
         return
 
+    auth = MoviciTokenAuth(auth_token=context.get("auth_token")) if context.get("auth") else False
+
     client = Client(
         base_url=context.url,
-        auth=MoviciTokenAuth(auth_token=context.auth_token),
+        auth=auth,
         on_error=handle_http_error,
+        service_urls=parse_service_urls(context, prefix="service."),
+        client=httpx.Client(timeout=httpx.Timeout(10.0, read=60.0)),
     )
     dependencies.set(client)
 
     if project_override:
-        context.project = project_override
+        context["project"] = project_override
 
 
 def handle_http_error(resp: Response):
@@ -44,6 +54,13 @@ def handle_http_error(resp: Response):
 
     echo(f"HTTP Error: {msg}")
     raise Abort()
+
+
+def handle_global_error(exc: Exception):
+    if isinstance(exc, HTTPError):
+        echo(f"A HTTP Error occured: {type(exc).__name__}({exc!s})")
+    else:
+        raise exc from None
 
 
 @command
@@ -70,6 +87,13 @@ def activate_project(project):
     if project not in projects_dict:
         raise InvalidResource("project", project)
 
-    context.project = project
+    context["project"] = project
     write_config(config)
     echo(f"Project {project} succefully activated!")
+
+
+@command(name="initialize-data-dir")
+@argument("directory", type=PathType(), default=pathlib.Path("."))
+def initialize_data_dir(directory):
+    MoviciDataDir.initialize(pathlib.Path(directory))
+    echo("Succesfully initialized movici data directory")

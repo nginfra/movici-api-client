@@ -13,10 +13,29 @@ class MoviciCLIError(Exception):
 
 
 @dataclasses.dataclass
-class InvalidConfig(MoviciCLIError):
+class CustomError(MoviciCLIError):
     msg: str
-    path: pathlib.Path
-    template = "Invalid config file [{msg}]: {path}"
+    template = "{msg}"
+
+
+@dataclasses.dataclass
+class InvalidDirectory(MoviciCLIError):
+    msg: str
+    dir: pathlib.Path
+
+    template = "Invalid directory [{msg}]: {dir!s}"
+
+
+@dataclasses.dataclass
+class InvalidFile(MoviciCLIError):
+    msg: str
+    file: pathlib.Path
+
+    template = "Invalid file [{msg}]: {file!s}"
+
+
+class InvalidConfigFile(InvalidFile):
+    template = "Invalid config file [{msg}]: {file!s}"
 
 
 class NoCurrentContext(MoviciCLIError):
@@ -29,6 +48,12 @@ class NoConfig(MoviciCLIError):
 
 class Unauthenticated(MoviciCLIError):
     template = "Authentication expired, please login using `movici login`"
+
+
+@dataclasses.dataclass
+class DuplicateContext(MoviciCLIError, ValueError):
+    name: str
+    template = "Config {name} already exists"
 
 
 @dataclasses.dataclass
@@ -70,7 +95,15 @@ class InvalidUsage(MoviciCLIError):
     template = "Invalid usage: {msg}"
 
 
+class InvalidFileEdit(MoviciCLIError):
+    template = "Your edit was invalid"
+
+
+class NoChangeDetected(MoviciCLIError):
+    template = "No change detected"
+
+
 @dataclasses.dataclass
-class InvalidFile(MoviciCLIError):
-    file: pathlib.Path
-    template = "Invalid file: {file!s}"
+class InvalidEditor(MoviciCLIError):
+    editor: str
+    template = "Invalid editor {editor}. Please set the EDITOR environment setting"

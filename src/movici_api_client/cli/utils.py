@@ -4,7 +4,7 @@ import typing as t
 import uuid
 
 import questionary
-from click import Abort
+from click import Abort, Choice
 from click import Path as PathType
 from click import confirm, echo, prompt
 
@@ -29,6 +29,7 @@ prompt = prompt
 echo = echo
 Abort = Abort
 confirm = confirm
+Choice = Choice
 
 DirPath = functools.partial(
     PathType, file_okay=False, readable=True, exists=True, path_type=pathlib.Path
@@ -54,10 +55,10 @@ def assert_current_context():
 def assert_active_project(project=None):
     if project is None:
         context = assert_current_context()
-        if context.project is None:
+        try:
+            return assert_project_uuid(context["project"])
+        except KeyError:
             raise NoActiveProject()
-        project = context.project
-    return assert_project_uuid(project)
 
 
 def assert_resource_uuid(resource: str, request: Request, resource_type="resource"):
@@ -78,8 +79,32 @@ def get_resource_uuids(request: Request):
     return {p["name"]: p["uuid"] for p in all_resources}
 
 
+def get_resource_uuid(name_or_uuid, request, resource_type="resource", client=None):
+    client = client or dependencies.get(Client)
+    return (
+        name_or_uuid
+        if validate_uuid(name_or_uuid)
+        else assert_resource_uuid(name_or_uuid, request=request, resource_type=resource_type)
+    )
+
+
+def get_resource(name_or_uuid, request, client=None, resource_type="resource"):
+    client = client or dependencies.get(Client)
+    all_resources = client.request(request)
+    return get_resource_from_list(name_or_uuid, all_resources, resource_type=resource_type)
+
+
 def get_project_uuids():
     return get_resource_uuids(GetProjects())
+
+
+def get_resource_from_list(name_or_uuid, all_resources, resource_type="resource"):
+    match_field = "uuid" if validate_uuid(name_or_uuid) else "name"
+    for res in all_resources:
+        if name_or_uuid == res[match_field]:
+            return res
+    else:
+        raise InvalidResource(resource_type, name_or_uuid)
 
 
 def handle_movici_error(e: MoviciCLIError):
@@ -104,6 +129,15 @@ def prompt_choices(question: str, choices: t.Sequence[str]):
     ).unsafe_ask()
 
 
+async def prompt_choices_async(question: str, choices: t.Sequence[str]):
+    return await questionary.select(
+        question,
+        choices=choices,
+        use_shortcuts=len(choices) < 36,
+        use_arrow_keys=True,
+    ).unsafe_ask_async()
+
+
 def validate_uuid(entry: t.Union[str, uuid.UUID]):
     if isinstance(entry, uuid.UUID):
         return True
@@ -115,7 +149,7 @@ def validate_uuid(entry: t.Union[str, uuid.UUID]):
     return True
 
 
-def resolve_question_flag(flag: bool, default_yes: bool, default_no: bool) -> t.Optional[bool]:
+def maybe_set_flag(flag: bool, default_yes: bool, default_no: bool) -> t.Optional[bool]:
     """Returns the value for a question-like flag. These flags can be set to either True/False or
     None in which case the user should be asked. If the flag is not specifically set to True and no
     default is given, flag is set to None. A positive flag value has precedence over a default no.
