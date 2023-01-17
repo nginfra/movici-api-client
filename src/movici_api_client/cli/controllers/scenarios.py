@@ -55,10 +55,14 @@ def upload_scenario_options(func):
                 ),
             ),
             option(
-                "-s",
                 "--with-simulation",
                 is_flag=True,
                 help=("Also upload local simulation results (if they exist)"),
+            ),
+            option(
+                "--with-views",
+                is_flag=True,
+                help=("Also upload local views (if they exist)"),
             ),
         ]
     )(upload_options(func))

@@ -178,11 +178,10 @@ class UploadScenario(Task):
         self.inspect_file = inspect_file
         self.name_or_uuid = name_or_uuid
         self.all_resources = all_resources
-        self.strategy = strategy
+        self.strategy = strategy or ScenarioUploadStrategy(self.client)
         self.kwargs = kwargs
 
     async def run(self) -> t.Optional[bool]:
-        strategy = self.strategy or ScenarioUploadStrategy(self.client)
         uuid = await UploadResource(
             client=self.client,
             file=self.file,
@@ -192,7 +191,7 @@ class UploadScenario(Task):
             inspect_file=self.inspect_file,
             name_or_uuid=self.name_or_uuid,
             all_resources=self.all_resources,
-            strategy=strategy,
+            strategy=self.strategy,
         ).run()
         if uuid is None:
             return
@@ -220,16 +219,17 @@ class UploadScenario(Task):
         )
 
     async def upload_views(self, uuid):
-        all_resources = await self.strategy.get_all(self.parent_uuid)
         movici_dir = MoviciDataDir.resolve_from_subpath(self.file)
         scenario_name = self.file.stem
-        UploadMultipleResources(
+        strategy = ViewUploadStrategy(self.client, scenario=scenario_name)
+        await UploadMultipleResources(
             client=self.client,
             directory=movici_dir,
             parent_uuid=uuid,
-            strategy=ViewUploadStrategy(self.client, scenario=scenario_name),
-            all_resources=all_resources,
-        )
+            strategy=strategy,
+            overwrite=self.overwrite,
+            create_new=self.create_new,
+        ).run()
 
 
 class UploadTimeline(Task):
@@ -310,6 +310,33 @@ class UploadUpdate(Task):
                 raise ValueError("Could not determine update data")
             contents["data"] = contents["name"]
         return contents
+
+
+class UploadProject(Task):
+    def __init__(
+        self,
+        client: IAsyncClient,
+        directory: DataDir,
+        uuid: str,
+        all_resources=None,
+        **kwargs,
+    ):
+        self.client = client
+        self.directory = directory
+        self.uuid = uuid
+        self.all_resources = all_resources
+        self.kwargs = kwargs
+
+    async def run(self) -> t.Optional[bool]:
+        for strategy_kind in (DatasetUploadStrategy, ScenarioUploadStrategy):
+            strategy = strategy_kind(self.client)
+            await UploadMultipleResources(
+                client=self.client,
+                directory=self.directory,
+                parent_uuid=self.uuid,
+                strategy=strategy,
+                **self.kwargs,
+            ).run()
 
 
 class UploadStrategy:

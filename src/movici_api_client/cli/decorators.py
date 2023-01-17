@@ -6,7 +6,7 @@ from movici_api_client.api.requests import CheckAuthToken
 from movici_api_client.cli.controllers.common import resolve_data_directory
 
 from . import dependencies
-from .common import OPTIONS_COMMAND, get_options, has_options, set_options
+from .common import OPTIONS_COMMAND, Controller, get_options, has_options, set_options
 from .exceptions import InvalidActiveProject, MoviciCLIError, NoActiveProject, Unauthenticated
 from .ui import format_anything, format_table
 from .utils import DirPath, assert_current_context, echo, get_project_uuids, handle_movici_error
@@ -115,7 +115,9 @@ def valid_project_uuid(func):
             project_uuid = projects_dict[project]
         except KeyError:
             raise InvalidActiveProject(project)
-
+        if len(args) and isinstance(args[0], Controller):
+            self, *args = args
+            return func(self, project_uuid, *args, **kwargs)
         return func(project_uuid, *args, **kwargs)
 
     return decorated
@@ -143,19 +145,23 @@ def download_options(
     def decorator(func):
         return combine_decorators(
             [
-                option(
-                    "-d",
-                    "--directory",
-                    type=DirPath(writable=True),
-                    default=None,
-                    callback=lambda _, __, path: resolve_data_directory(path, purpose),
-                ),
+                data_directory_option(purpose),
                 option("-o", "-y", "--overwrite", is_flag=True, help="Always overwrite"),
                 option("-n", "--no-overwrite", is_flag=True, help="Never overwrite"),
             ]
         )(func)
 
     return decorator
+
+
+def data_directory_option(purpose):
+    return option(
+        "-d",
+        "--directory",
+        type=DirPath(writable=True),
+        default=None,
+        callback=lambda _, __, path: resolve_data_directory(path, purpose),
+    )
 
 
 def combine_decorators(decorators: t.Iterable[callable]):

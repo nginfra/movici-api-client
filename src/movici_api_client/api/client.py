@@ -80,7 +80,6 @@ class AsyncClient(BaseClient, IAsyncClient):
             self._ensure_client()
             self._assert_auth(req)
             conf = self._prepare_request_config(req)
-
             resp = await self.client.request(**conf)
 
             self._handle_failure(resp, on_error)

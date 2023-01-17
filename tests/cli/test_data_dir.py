@@ -10,7 +10,9 @@ from movici_api_client.cli.exceptions import InvalidDirectory
 
 @pytest.fixture
 def movici_data_dir(tmp_path):
-    return MoviciDataDir.initialize(tmp_path.joinpath("movici-data-dir"))
+    rv = MoviciDataDir(tmp_path)
+    rv.initialize()
+    return rv
 
 
 def test_initialize_creates_directories(movici_data_dir):

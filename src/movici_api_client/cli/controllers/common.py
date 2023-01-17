@@ -40,7 +40,7 @@ def get_scenario(name_or_uuid, project_uuid, client=None):
 
 def resolve_data_directory(
     path: t.Union[str, pathlib.Path, None],
-    purpose: t.Literal["datasets", "scenarios", "updates", "views"],
+    purpose: t.Literal["datasets", "scenarios", "updates", "views", "project"],
 ):
     if data_dir := MoviciDataDir.resolve_from_subpath(path or pathlib.Path(".")):
         echo("Movici data directory detected")
@@ -53,6 +53,7 @@ def resolve_data_directory(
             "scenarios": ScenariosDirectory,
             "updates": UpdatesDirectory,
             "views": ViewsDirectory,
+            "project": MoviciDataDir,
         }[purpose](path)
 
     raise CustomError("Could not determine directory")

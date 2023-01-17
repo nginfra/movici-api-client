@@ -2,6 +2,7 @@ import dataclasses
 import pathlib
 
 
+@dataclasses.dataclass
 class MoviciCLIError(Exception):
     template: str = dataclasses.field(init=False, default=None)
 

@@ -1,23 +1,52 @@
-from movici_api_client.api.client import Client
+import asyncio
+
+from movici_api_client.api.client import AsyncClient, Client
 from movici_api_client.api.requests import (
     CreateProject,
     DeleteProject,
     GetProjects,
     GetSingleProject,
 )
+from movici_api_client.cli.filetransfer.download import DownloadProject
+from movici_api_client.cli.filetransfer.upload import UploadProject
 
 from ..common import Controller
-from ..decorators import argument, authenticated, command, format_output, option
+from ..decorators import (
+    argument,
+    authenticated,
+    catch_exceptions,
+    combine_decorators,
+    command,
+    data_directory_option,
+    download_options,
+    format_output,
+    option,
+    upload_options,
+    valid_project_uuid,
+)
 from ..dependencies import get
-from ..exceptions import NotYetImplemented
+from ..exceptions import InvalidUsage, NotYetImplemented
 from ..ui import format_object
-from ..utils import DirPath, assert_project_uuid, confirm, echo, prompt, validate_uuid
+from ..utils import assert_project_uuid, confirm, echo, maybe_set_flag, prompt, validate_uuid
+
+
+def upload_project_options(func):
+    return combine_decorators(
+        [
+            option(
+                "-i",
+                "--inspect",
+                is_flag=True,
+                help="read files to infer meta data and enforce consistency",
+            ),
+        ]
+    )(upload_options(func))
 
 
 class ProjectController(Controller):
     name = "project"
 
-    decorators = (authenticated,)
+    decorators = (authenticated, catch_exceptions)
 
     @command(name="projects", group="get")
     @format_output(fields=("uuid", "name", "display_name", "created_on"))
@@ -70,7 +99,46 @@ class ProjectController(Controller):
         return client.request(DeleteProject(uuid))
 
     @command
-    @argument("project")
-    @option("-d", "--directory", type=DirPath())
-    def upload(self, project, directory):
-        raise NotYetImplemented()
+    @valid_project_uuid
+    @data_directory_option("project")
+    @upload_project_options
+    def upload(self, project_uuid, directory, overwrite, create, yes, no, inspect, **kwargs):
+        if yes and no:
+            raise InvalidUsage("cannot combine --yes with --no")
+        client = AsyncClient.from_sync_client(get(Client))
+
+        asyncio.run(
+            UploadProject(
+                client,
+                directory,
+                uuid=project_uuid,
+                overwrite=maybe_set_flag(overwrite, yes, no),
+                create_new=maybe_set_flag(create, yes, no),
+                inspect_file=inspect,
+                with_simulation=True,
+                with_views=True,
+                **kwargs,
+            ).run()
+        )
+
+    @command
+    @valid_project_uuid
+    @download_options("project")
+    def download(self, project_uuid, directory, overwrite, no_overwrite):
+
+        if overwrite and no_overwrite:
+            raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
+
+        directory.initialize()
+        client = AsyncClient.from_sync_client(get(Client))
+        asyncio.run(
+            DownloadProject(
+                parent={"uuid": project_uuid},
+                client=client,
+                directory=directory,
+                overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite),
+                cli_params={"with_simulation": True, "with_views": True},
+            ).run()
+        )
+
+        echo("Success!")

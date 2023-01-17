@@ -36,7 +36,7 @@ class DataDir:
     @staticmethod
     def _ensure_directory(path: pathlib.Path):
         if not path.exists():
-            path.mkdir(exist_ok=True)
+            path.mkdir(exist_ok=True, parents=True)
         if not path.is_dir():
             raise InvalidDirectory("not a directory", path)
         return path
@@ -80,17 +80,14 @@ class MoviciDataDir(DataDir):
 
         return None
 
-    @classmethod
-    def initialize(cls, path: pathlib.Path):
-        if not path.exists():
-            path.mkdir(parents=True, exist_ok=True)
-        rv = cls(path)
-        rv.create_tree(exists_ok=True)
-        return rv
+    def initialize(self):
+        if not self.path.exists():
+            self.path.mkdir(parents=True, exist_ok=True)
+        self.create_tree(exists_ok=True)
 
     def create_tree(self, exists_ok: bool = False):
-        if not self.path.is_dir() or list(self.path.iterdir()):
-            raise InvalidDirectory("not an empty directory", self.path)
+        if not self.path.is_dir():
+            raise InvalidDirectory("not a directory", self.path)
         self._sentinel.touch()
         self.datasets.mkdir(exist_ok=exists_ok)
         self.scenarios.mkdir(exist_ok=exists_ok)
@@ -103,10 +100,10 @@ class MoviciDataDir(DataDir):
         yield from ScenariosDirectory(self.scenarios).iter_scenarios()
 
     def iter_updates(self, scenario: str):
-        yield from UpdatesDirectory(self.scenarios).iter_updates(scenario)
+        yield from UpdatesDirectory(self.scenarios.joinpath(scenario)).iter_updates()
 
     def iter_views(self, scenario: str):
-        yield from ViewsDirectory(self.views).iter_views(scenario)
+        yield from ViewsDirectory(self.views.joinpath(scenario)).iter_views()
 
     def ensure_views_dir(self, scenario: str):
         return self._ensure_directory(self.views.joinpath(scenario))
@@ -174,7 +171,7 @@ class UpdatesDirectory(SimpleDataDirectory):
 
     def iter_updates(self, scenario: str = None):
         pattern = re.compile(r"t(?P<timestamp>\d+)_(?P<iteration>\d+)_(?P<dataset>\w+)")
-        for file in self._iter_files(self.path):
+        for file in self._iter_files():
             if pattern.match(file.stem):
                 yield file
 
@@ -186,7 +183,7 @@ class ViewsDirectory(SimpleDataDirectory):
     extensions = {".json"}
 
     def iter_views(self, scenario: str = None):
-        yield from self._iter_files(self.path)
+        yield from self._iter_files()
 
     def ensure_views_dir(self, scenario: str):
-        return self._ensure_directory(self.path)
+        return self._ensure_directory()

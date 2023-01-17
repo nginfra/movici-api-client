@@ -13,6 +13,7 @@ from movici_api_client.api.common import Request
 from movici_api_client.api.requests import (
     GetDatasetData,
     GetDatasets,
+    GetProjects,
     GetScenarios,
     GetSingleScenario,
     GetSingleUpdate,
@@ -253,6 +254,29 @@ class DownloadViews(Task):
         if not prepare_overwrite_file(file, self.overwrite):
             return
         file.write_text(json.dumps(view, indent=2))
+
+
+class DownloadProject(RecursivelyDownloadResource):
+    def request_all(self):
+        return GetProjects()
+
+    def create_subtasks(self, resources: t.List[dict]) -> t.Iterable[Task]:
+        yield DownloadDatasets(
+            parent=self.parent,
+            client=self.client,
+            directory=self.directory,
+            overwrite=self.overwrite,
+            progress=self.progress,
+            cli_params=self.cli_params,
+        )
+        yield DownloadScenarios(
+            self.parent,
+            client=self.client,
+            directory=self.directory,
+            overwrite=self.overwrite,
+            progress=self.progress,
+            cli_params=self.cli_params,
+        )
 
 
 class PrepareOverwriteDirectory(Task):
