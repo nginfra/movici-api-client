@@ -1,7 +1,8 @@
+import gimme
+
 from movici_api_client.cli.config import Config, Context, write_config
 from movici_api_client.cli.exceptions import DuplicateContext, NoContextAvailable, NoSuchContext
 
-from .. import dependencies
 from ..common import Controller
 from ..decorators import argument, command, format_output, option
 from ..utils import assert_context, confirm, echo, prompt
@@ -10,11 +11,12 @@ from ..utils import assert_context, confirm, echo, prompt
 class ConfigController(Controller):
     name = "config"
     reverse = False
+    config: Config = gimme.attribute(Config)
 
     @command
     @argument("name", required=False)
     def create(self, name):
-        config = dependencies.get(Config)
+        config = self.config
 
         if config.get_context(name):
             raise DuplicateContext(name)
@@ -34,7 +36,7 @@ class ConfigController(Controller):
     @command
     @argument("context")
     def activate(self, context: str):
-        config = dependencies.get(Config)
+        config = self.config
         if not len(config.contexts):
             raise NoContextAvailable()
         try:
@@ -48,7 +50,7 @@ class ConfigController(Controller):
     @option("-a", "--all", is_flag=True)
     @format_output
     def show(self, all):
-        config = dependencies.get(Config)
+        config = self.config
         if all:
             return config.contexts
         else:
@@ -58,7 +60,7 @@ class ConfigController(Controller):
     @argument("key")
     @argument("value")
     def set(self, key, value):
-        config = dependencies.get(Config)
+        config = self.config
         context = assert_context(config)
         context[key] = value
 
@@ -69,7 +71,7 @@ class ConfigController(Controller):
     @argument("keys", nargs=-1, required=True)
     def unset(self, keys):
 
-        config = dependencies.get(Config)
+        config = self.config
         context = assert_context(config)
 
         for key in keys:

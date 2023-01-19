@@ -3,7 +3,7 @@ import json
 import pathlib
 import time
 
-from movici_api_client.api.client import AsyncClient, Client
+from movici_api_client.api.client import Client
 from movici_api_client.api.requests import (
     CreateScenario,
     DeleteScenario,
@@ -75,8 +75,7 @@ class ScenarioController(Controller):
     @command(name="scenarios", group="get")
     @format_output
     def list(self, project_uuid):
-        client = get(Client)
-        return client.request(GetScenarios(project_uuid))
+        return self.client.request(GetScenarios(project_uuid))
 
     @command
     @argument("name_or_uuid")
@@ -96,10 +95,9 @@ class ScenarioController(Controller):
         )
     )
     def get(self, project_uuid, name_or_uuid, output):
-        client = get(Client)
-        uuid = get_scenario_uuid(name_or_uuid, project_uuid, client=client)
+        uuid = get_scenario_uuid(name_or_uuid, project_uuid, client=self.client)
 
-        result = client.request(GetSingleScenario(uuid))
+        result = self.client.request(GetSingleScenario(uuid))
         if output == "json":
             result = json.dumps(result, indent=2)
         return result
@@ -119,7 +117,6 @@ class ScenarioController(Controller):
 
         description = description if description is not None else prompt("description", default="")
 
-        client = get(Client)
         payload = {
             "name": name,
             "display_name": name if display_name == "same as name" else display_name,
@@ -128,19 +125,18 @@ class ScenarioController(Controller):
             "models": [],
             "datasets": [],
         }
-        return client.request(CreateScenario(project_uuid, payload=payload))
+        return self.client.request(CreateScenario(project_uuid, payload=payload))
 
     @command
     @argument("name_or_uuid")
     @format_output
     def delete(self, project_uuid, name_or_uuid):
-        client = get(Client)
-        uuid = get_scenario_uuid(name_or_uuid, project_uuid, client=client)
+        uuid = get_scenario_uuid(name_or_uuid, project_uuid, client=self.client)
 
         confirm(
             f"Are you sure you wish to delete scenario '{name_or_uuid}' and all associated data?"
         )
-        return client.request(DeleteScenario(uuid))
+        return self.client.request(DeleteScenario(uuid))
 
     @command
     @argument("name_or_uuid")
@@ -148,15 +144,14 @@ class ScenarioController(Controller):
         def on_error(resp):
             return resp.status_code != 404
 
-        client = get(Client)
-        uuid = get_scenario_uuid(name_or_uuid, project_uuid, client=client)
+        uuid = get_scenario_uuid(name_or_uuid, project_uuid, client=self.client)
 
         confirm(
             f"Are you sure you wish to clear scenario '{name_or_uuid}' of its simulation results?"
         )
-        client.request(DeleteTimeline(uuid), on_error=on_error)
-        client.request(DeleteSimulation(uuid), on_error=on_error)
-        wait_until_simulation_is_reset(uuid, client=client)
+        self.client.request(DeleteTimeline(uuid), on_error=on_error)
+        self.client.request(DeleteSimulation(uuid), on_error=on_error)
+        wait_until_simulation_is_reset(uuid, client=self.client)
         echo("Scenario successfully cleared!")
 
     @command
@@ -167,9 +162,7 @@ class ScenarioController(Controller):
         if overwrite and no_overwrite:
             raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
 
-        client = get(Client)
-
-        scenario = get_scenario(name_or_uuid, project_uuid, client)
+        scenario = get_scenario(name_or_uuid, project_uuid, self.client)
         uuid, has_timeline = scenario["uuid"], scenario["has_timeline"]
         overwrite = maybe_set_flag(False, overwrite, no_overwrite)
         if has_timeline:
@@ -187,10 +180,10 @@ class ScenarioController(Controller):
             def on_error(resp):
                 return resp.status_code != 404
 
-            client.request(DeleteTimeline(uuid), on_error=on_error)
-            client.request(DeleteSimulation(uuid), on_error=on_error)
-            wait_until_simulation_is_reset(uuid, client=client)
-        client.request(RunSimulation(uuid))
+            self.client.request(DeleteTimeline(uuid), on_error=on_error)
+            self.client.request(DeleteSimulation(uuid), on_error=on_error)
+            wait_until_simulation_is_reset(uuid, client=self.client)
+        self.client.request(RunSimulation(uuid))
         echo("Simulation started!")
 
     @command
@@ -209,11 +202,10 @@ class ScenarioController(Controller):
         inspect,
         **kwargs,
     ):
-        client = AsyncClient.from_sync_client(get(Client))
 
         asyncio.run(
             UploadScenario(
-                client=client,
+                client=self.client,
                 file=file,
                 parent_uuid=project_uuid,
                 name_or_uuid=name_or_uuid,
@@ -236,24 +228,32 @@ class ScenarioController(Controller):
     )
     @upload_scenario_options
     def upload_multiple(
-        self, project_uuid, directory, overwrite, create, yes, no, inspect, **kwargs
+        self,
+        project_uuid,
+        directory,
+        overwrite,
+        create,
+        yes,
+        no,
+        inspect,
+        with_simulation,
+        with_views,
     ):
         if yes and no:
             raise InvalidUsage("cannot combine --yes with --no")
-        client = AsyncClient.from_sync_client(get(Client))
-        strategy = ScenarioUploadStrategy(client=client)
+        self.params.overwrite = maybe_set_flag(overwrite, yes, no)
+        self.params.create = maybe_set_flag(create, yes, no)
+        self.params.inspect = inspect
+        self.params.with_simulation = with_simulation
+        self.params.with_views = with_views
+        strategy = ScenarioUploadStrategy(client=self.async_client)
 
         asyncio.run(
             UploadMultipleResources(
-                client,
                 directory,
                 project_uuid,
                 strategy=strategy,
-                overwrite=maybe_set_flag(overwrite, yes, no),
-                create_new=maybe_set_flag(create, yes, no),
-                inspect_file=inspect,
                 upload_task=UploadScenario,
-                **kwargs,
             ).run()
         )
 
@@ -262,20 +262,28 @@ class ScenarioController(Controller):
     @download_options(purpose="scenarios")
     @option("--with-simulation", is_flag=True)
     @option("--with-views", is_flag=True)
-    def download(self, project_uuid, name_or_uuid, directory, overwrite, no_overwrite, **kwargs):
+    def download(
+        self,
+        project_uuid,
+        name_or_uuid,
+        directory,
+        overwrite,
+        no_overwrite,
+        with_simulation,
+        with_views,
+    ):
         if overwrite and no_overwrite:
             raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
-        client = get(Client)
-        client = AsyncClient.from_sync_client(client)
+        self.params.overwrite = maybe_set_flag(False, overwrite, no_overwrite)
+        self.params.with_simulation = with_simulation
+        self.params.with_views = with_views
 
-        scenario = get_scenario(name_or_uuid, project_uuid)
+        scenario = get_scenario(name_or_uuid, project_uuid, client=self.client)
         asyncio.run(
             DownloadSingleScenario(
                 parent=scenario,
-                client=client,
                 directory=directory,
                 overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite),
-                cli_params=kwargs,
             ).run()
         )
         echo("Success!")
@@ -287,12 +295,9 @@ class ScenarioController(Controller):
     def download_multiple(self, project_uuid, directory, overwrite, no_overwrite, **kwargs):
         if overwrite and no_overwrite:
             raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
-        client = get(Client)
-        client = AsyncClient.from_sync_client(client)
         asyncio.run(
             DownloadScenarios(
                 {"uuid": project_uuid},
-                client,
                 directory=directory,
                 overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite),
                 progress=False,
@@ -304,11 +309,10 @@ class ScenarioController(Controller):
     @command
     @argument("name_or_uuid")
     def edit(self, project_uuid, name_or_uuid):
-        client = get(Client)
-        uuid = get_scenario_uuid(name_or_uuid, project_uuid, client=client)
-        current = client.request(GetSingleScenario(uuid))
+        uuid = get_scenario_uuid(name_or_uuid, project_uuid, client=self.client)
+        current = self.client.request(GetSingleScenario(uuid))
         result = edit_resource(current)
-        client.request(UpdateScenario(uuid, result))
+        self.client.request(UpdateScenario(uuid, result))
         echo("Succesfully updated scenario")
 
 

@@ -1,18 +1,23 @@
 import json
 import os
 
+import gimme
 import pytest
 
-from movici_api_client.api import Client
-from movici_api_client.cli import dependencies
 from movici_api_client.cli.config import CONFIG_LOCATION_ENV, get_config
 from movici_api_client.cli.testing import FakeClient
 
 
 @pytest.fixture(autouse=True)
-def client():
+def gimme_repo():
+    with gimme.context() as ctx:
+        yield ctx
+
+
+@pytest.fixture(autouse=True)
+def client(gimme_repo):
     client = FakeClient()
-    dependencies.set(client, tp=Client, fixed=True)
+    gimme_repo.add(client)
     return client
 
 

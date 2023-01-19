@@ -1,6 +1,6 @@
 from .auth import MoviciLoginAuth, MoviciTokenAuth
 from .client import AsyncClient, Client, HTTPError, Response
-from .common import IAsyncClient, ISyncClient
+from .common import IAsyncClient, ISyncClient, Request
 
 __all__ = [
     "AsyncClient",
@@ -10,5 +10,6 @@ __all__ = [
     "ISyncClient",
     "MoviciLoginAuth",
     "MoviciTokenAuth",
+    "Request",
     "Response",
 ]

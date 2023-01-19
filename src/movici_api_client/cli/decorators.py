@@ -1,15 +1,40 @@
+import asyncio
 import functools
 import typing as t
 
-from movici_api_client.api import Client, Response
+import gimme
+
+from movici_api_client.api import Client, Request, Response
 from movici_api_client.api.requests import CheckAuthToken
 from movici_api_client.cli.controllers.common import resolve_data_directory
+from movici_api_client.cli.cqrs import Event, Mediator
+from movici_api_client.cli.events import MakeRequest
 
 from . import dependencies
-from .common import OPTIONS_COMMAND, Controller, get_options, has_options, set_options
-from .exceptions import InvalidActiveProject, MoviciCLIError, NoActiveProject, Unauthenticated
+from .common import (
+    OPTIONS_COMMAND,
+    CLIParameters,
+    Controller,
+    get_options,
+    has_options,
+    set_options,
+)
+from .exceptions import (
+    InvalidActiveProject,
+    InvalidUsage,
+    MoviciCLIError,
+    NoActiveProject,
+    Unauthenticated,
+)
 from .ui import format_anything, format_table
-from .utils import DirPath, assert_current_context, echo, get_project_uuids, handle_movici_error
+from .utils import (
+    DirPath,
+    assert_current_context,
+    echo,
+    get_project_uuids,
+    handle_movici_error,
+    maybe_set_flag,
+)
 
 
 def catch_exceptions(func):
@@ -173,3 +198,89 @@ def combine_decorators(decorators: t.Iterable[callable]):
         )
 
     return decorator
+
+
+_CLI_OPTIONS = {
+    "inspect": option(
+        "-i",
+        "--inspect",
+        is_flag=True,
+        help="read files to infer meta data and enforce consistency",
+    ),
+    "create": option("-c", "--create", is_flag=True, help="Always create if necessary"),
+    "overwrite": option("-o", "--overwrite", is_flag=True, help="Always overwrite"),
+    "no_overwrite": option("-n", "--no-overwrite", is_flag=True, help="Never overwrite"),
+    "yes": option(
+        "-y",
+        "--yes",
+        is_flag=True,
+        help="Answer yes to all questions",
+    ),
+    "no": option("-n", "--no", is_flag=True, help="Answer no to all questions"),
+}
+
+
+def cli_options(*options: str):
+    click_options = combine_decorators(_CLI_OPTIONS[option] for option in options)
+
+    def decorator(func):
+        @click_options
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            normalize_options(kwargs)
+            params = gimme.that(CLIParameters)
+
+            for option in options:
+                if option not in kwargs:
+                    continue
+                result = kwargs.pop(option)
+                setattr(params, option, result)
+            func(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
+
+
+def normalize_options(arguments: dict):
+    if "overwrite" in arguments and "no_overwrite" in arguments:
+        overwrite, no_overwrite = arguments.pop("overwrite"), arguments.pop("no_overwrite")
+        if overwrite and no_overwrite:
+            raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
+        arguments["overwrite"] = maybe_set_flag(False, overwrite, no_overwrite)
+
+    if "yes" in arguments and "no" in arguments:
+        yes, no = arguments.pop("yes"), arguments.pop("no")
+        if yes and no:
+            raise InvalidUsage("cannot combine --yes with --no")
+
+        if "create" in arguments:
+            arguments["create"] = maybe_set_flag(arguments["create"], yes, no)
+
+        if "overwrite" in arguments:
+            arguments["overwrite"] = maybe_set_flag(arguments["overwrite"], yes, no)
+
+    return arguments
+
+
+def handle_event(func=None, *, success_message=None):
+    if func is None:
+        return functools.partial(handle_event, success_message=success_message)
+
+    @functools.wraps(func)
+    def _wrapper(*args, **kwargs):
+        event = func(*args, **kwargs)
+        if isinstance(event, Request):
+            event = MakeRequest(event)
+        if not isinstance(event, (Event, Request)):
+            raise TypeError(
+                "A function decorated with 'handle_event' must return an Event or a Request"
+            )
+
+        mediator = gimme.that(Mediator)
+        result = asyncio.run(mediator.send(event))
+        if success_message is not None:
+            echo(success_message)
+        return result
+
+    return _wrapper

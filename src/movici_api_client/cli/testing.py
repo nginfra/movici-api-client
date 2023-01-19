@@ -2,8 +2,10 @@ import dataclasses
 import unittest.mock
 from collections import deque
 
+from movici_api_client.api.client import Client
 
-class FakeClient:
+
+class FakeClient(Client):
     def __init__(self, *args, **kwargs) -> None:
         self.responses = deque()
         self.request = unittest.mock.Mock(side_effect=self._request)

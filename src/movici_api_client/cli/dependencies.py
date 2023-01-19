@@ -1,5 +1,7 @@
 import typing as t
 
+import gimme
+
 T = t.TypeVar("T")
 _repository = {}
 
@@ -7,7 +9,7 @@ _fixed_types = set()
 
 
 def get(tp: t.Type[T]) -> T:
-    return _repository[tp]
+    return gimme.that(tp)
 
 
 def set(obj, tp=None, fixed=False):
