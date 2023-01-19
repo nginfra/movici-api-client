@@ -199,7 +199,7 @@ class RemoteDownloadDatasetHandler(RemoteEventHandler):
     project_uuid: str
 
     async def handle(self, event: DownloadDataset, mediator: Mediator):
-        dataset = await DatasetQuery(self.project_uuid).get_by_name_or_uuid(event.name_or_uuid)
+        dataset = await DatasetQuery(self.project_uuid).by_name_or_uuid(event.name_or_uuid)
         file = event.directory.datasets.joinpath(dataset["name"])
         return await DownloadResource(
             file=file,

@@ -23,7 +23,7 @@ class ResourceQuery:
         all_resources = await self.client.request(request)
         return {p["name"]: p["uuid"] for p in all_resources}
 
-    async def get_by_name_or_uuid(self, name_or_uuid):
+    async def by_name_or_uuid(self, name_or_uuid):
         request = self.request_all()
         all_resources = await self.client.request(request)
         return self.get_from_list(name_or_uuid, all_resources)
@@ -52,6 +52,8 @@ class ProjectQuery(ResourceQuery):
 
 
 class DatasetQuery(ResourceQuery):
+    resource_type = "dataset"
+
     def __init__(self, project_uuid: str):
         self.project_uuid = project_uuid
 
@@ -60,6 +62,8 @@ class DatasetQuery(ResourceQuery):
 
 
 class ScenarioQuery(ResourceQuery):
+    resource_type = "scenario"
+
     def __init__(self, project_uuid: str):
         self.project_uuid = project_uuid
 

@@ -13,7 +13,7 @@ def setup_gimme(gimme_repo):
 
 
 class FakeHandler(EventHandler, AsyncMock):
-    async def handle(self, event: FakeEvent):
+    async def handle(self, event: FakeEvent, mediator):
         await self(event)
         event.handled = True
 
@@ -68,7 +68,7 @@ class TestMediator:
             def __init__(self, service: MyService) -> None:
                 self.service = service
 
-            async def handle(self, event):
+            async def handle(self, event, mediator):
                 self.service.events.append(event)
 
         mediator = Mediator({Event1: MyHandler})
