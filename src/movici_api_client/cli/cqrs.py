@@ -11,6 +11,7 @@ class Event:
 
 class EventHandler:
     __event__: t.Type[Event] = None
+    __result_type__: t.Optional(t.Type) = None
 
     async def handle(self, event: Event, mediator: Mediator):
         raise NotImplementedError

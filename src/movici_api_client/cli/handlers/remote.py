@@ -3,14 +3,11 @@ import typing as t
 
 from movici_api_client.api import requests as req
 from movici_api_client.api.client import AsyncClient
-from movici_api_client.cli import filetransfer as ft
-from movici_api_client.cli.common import CLIParameters
-from movici_api_client.cli.events.authorization import CreateScope, DeleteScope, GetScopes
-from movici_api_client.cli.filetransfer.common import resolve_question_flag
-from movici_api_client.cli.handlers.common import gather_safe
-from movici_api_client.cli.helpers import edit_resource
 
+from .. import filetransfer as ft
+from ..common import CLIParameters
 from ..cqrs import Event, EventHandler, Mediator
+from ..events.authorization import CreateScope, DeleteScope, GetScopes
 from ..events.dataset import (
     ClearDataset,
     CreateDataset,
@@ -48,7 +45,10 @@ from ..events.scenario import (
     UploadScenario,
 )
 from ..exceptions import InvalidActiveProject, InvalidResource, NoActiveProject, NoChangeDetected
+from ..filetransfer.common import resolve_question_flag
+from ..handlers.common import gather_safe
 from ..handlers.query import DatasetQuery, ProjectQuery, ScenarioQuery, ScopeQuery
+from ..helpers import edit_resource
 from ..utils import assert_current_context, confirm, echo, prompt_choices_async
 
 
