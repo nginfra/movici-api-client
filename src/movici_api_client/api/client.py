@@ -6,7 +6,7 @@ import typing as t
 from asyncio import Semaphore
 
 import httpx
-from httpx import HTTPError, Response, Timeout  # noqa
+from httpx import HTTPError, HTTPStatusError, Response, Timeout  # noqa
 
 from .common import (
     Auth,

@@ -1,13 +1,13 @@
+import asyncio
 import typing as t
 
 from movici_api_client.api import requests as req
 from movici_api_client.api.client import AsyncClient
-from movici_api_client.cli.filetransfer.download import DownloadDatasets, DownloadResource
-from movici_api_client.cli.filetransfer.upload import (
-    DatasetUploadStrategy,
-    UploadMultipleResources,
-    UploadResource,
-)
+from movici_api_client.cli import filetransfer as ft
+from movici_api_client.cli.common import CLIParameters
+from movici_api_client.cli.events.authorization import CreateScope, DeleteScope, GetScopes
+from movici_api_client.cli.filetransfer.common import resolve_question_flag
+from movici_api_client.cli.handlers.common import gather_safe
 from movici_api_client.cli.helpers import edit_resource
 
 from ..cqrs import Event, EventHandler, Mediator
@@ -25,10 +25,31 @@ from ..events.dataset import (
     UploadDataset,
     UploadMultipleDatasets,
 )
-from ..events.project import GetAllProjects
-from ..exceptions import InvalidActiveProject, NoActiveProject, NoChangeDetected
-from ..handlers.query import DatasetQuery
-from ..utils import assert_current_context, confirm, prompt_choices_async
+from ..events.project import (
+    CreateProject,
+    DeleteProject,
+    DownloadProject,
+    GetAllProjects,
+    GetSingleProject,
+    UpdateProject,
+    UploadProject,
+)
+from ..events.scenario import (
+    ClearScenario,
+    CreateScenario,
+    DeleteScenario,
+    DownloadMultipleScenarios,
+    DownloadScenario,
+    EditScenario,
+    GetAllScenarios,
+    GetSingleScenario,
+    RunSimulation,
+    UploadMultipleScenarios,
+    UploadScenario,
+)
+from ..exceptions import InvalidActiveProject, InvalidResource, NoActiveProject, NoChangeDetected
+from ..handlers.query import DatasetQuery, ProjectQuery, ScenarioQuery, ScopeQuery
+from ..utils import assert_current_context, confirm, echo, prompt_choices_async
 
 
 def requires_valid_project_uuid(cls: t.Type[EventHandler]):
@@ -53,50 +74,125 @@ def requires_valid_project_uuid(cls: t.Type[EventHandler]):
 
 
 class RemoteEventHandler(EventHandler):
-    def __init__(self, client: AsyncClient) -> None:
+    def __init__(self, client: AsyncClient, params: CLIParameters) -> None:
         self.client = client
+        self.params = params
 
 
-class RemoteRequestHandler(RemoteEventHandler):
-    async def handle(self, event: Event, mediator: Mediator):
-        request = await self.make_request(event)
-        return await self.client.request(request)
-
-    async def make_request(self, event):
-        raise NotImplementedError
-
-
-class RemoteGetAllProjectsHandler(RemoteRequestHandler):
+class RemoteGetAllProjectsHandler(RemoteEventHandler):
     __event__ = GetAllProjects
 
-    async def make_request(self, event):
-        return req.GetProjects()
+    async def handle(self, event: GetAllProjects, mediator: Mediator):
+        return await self.client.request(req.GetProjects())
 
 
-class RemoteGetDatasetTypesHandler(RemoteRequestHandler):
-    __event__ = GetDatasetTypes
+class RemoteGetSingleProjectHandler(RemoteEventHandler):
+    __event__ = GetSingleProject
 
-    async def make_request(self, event):
-        return req.GetDatasetTypes()
+    async def handle(self, event: GetSingleProject, mediator: Mediator):
+        uuid = await ProjectQuery().get_uuid(event.name_or_uuid)
+        return await self.client.request(req.GetSingleProject(uuid))
+
+
+class RemoteCreateProjectHandler(RemoteEventHandler):
+    __event__ = CreateProject
+
+    async def handle(self, event: CreateProject, mediator: Mediator):
+        result, *_ = await gather_safe(
+            self.client.request(
+                req.CreateProject(name=event.name, display_name=event.display_name)
+            ),
+            mediator.send(CreateScope(f"project:{event.name}")),
+        )
+        return result
+
+
+class RemoteUpdateProjectHandler(RemoteEventHandler):
+    __event__ = UpdateProject
+
+    async def handle(self, event: UpdateProject, mediator: Mediator):
+        async with self.client:
+            uuid = await ProjectQuery().get_uuid(event.name_or_uuid)
+            if not event.display_name:
+                raise NoChangeDetected()
+            return await self.client.request(
+                req.UpdateProject(uuid, display_name=event.display_name)
+            )
+
+
+class RemoteDeleteProjectHandler(RemoteEventHandler):
+    __event__ = DeleteProject
+
+    async def handle(self, event: DeleteProject, mediator: Mediator):
+        async with self.client:
+            project = await ProjectQuery().by_name_or_uuid(event.name_or_uuid)
+
+            confirm(
+                f"Are you sure you wish to delete project '{event.name_or_uuid}' "
+                "with all its associated data?"
+            )
+            result = await self.client.request(req.DeleteProject(project["uuid"]))
+            try:
+                scope_uuid = await ScopeQuery().get_uuid(f"project:{project['name']}")
+            except InvalidResource:
+                pass
+            else:
+                await self.client.request(
+                    req.DeleteScope(scope_uuid), on_error=lambda r: r.status_code != 404
+                )
+
+            return result
 
 
 @requires_valid_project_uuid
-class RemoteGetAllDatasetsHandler(RemoteRequestHandler):
+class RemoteUploadProjectHandler(RemoteEventHandler):
+    __event__ = UploadProject
+    project_uuid: str
+
+    async def handle(self, event: UploadProject, mediator: Mediator):
+        self.params.with_simulation = True
+        self.params.with_views = True
+        return await ft.UploadProject(event.directory, uuid=self.project_uuid)
+
+
+@requires_valid_project_uuid
+class RemoteDownloadProjectHandler(RemoteEventHandler):
+    __event__ = DownloadProject
+    project_uuid: str
+
+    async def handle(self, event: DownloadProject, mediator: Mediator):
+        event.directory.initialize()
+        self.params.with_simulation = True
+        self.params.with_views = True
+        return await ft.DownloadProject(
+            parent={"uuid": self.project_uuid}, directory=event.directory
+        )
+
+
+class RemoteGetDatasetTypesHandler(RemoteEventHandler):
+    __event__ = GetDatasetTypes
+
+    async def handle(self, event: GetDatasetTypes, mediator: Mediator):
+        return await self.client.request(req.GetDatasetTypes())
+
+
+@requires_valid_project_uuid
+class RemoteGetAllDatasetsHandler(RemoteEventHandler):
     __event__ = GetAllDatasets
     project_uuid: str
 
-    async def make_request(self, event):
-        return req.GetDatasets(project_uuid=self.project_uuid)
+    async def handle(self, event: GetAllDatasets, mediator: Mediator):
+        return await self.client.request(req.GetDatasets(project_uuid=self.project_uuid))
 
 
 @requires_valid_project_uuid
-class RemoteGetSingleDatasetHandler(RemoteRequestHandler):
+class RemoteGetSingleDatasetHandler(RemoteEventHandler):
     __event__ = GetSingleDataset
     project_uuid: str
 
-    async def make_request(self, event: GetSingleDataset):
+    async def handle(self, event: GetSingleDataset, mediator: Mediator):
         uuid = await DatasetQuery(self.project_uuid).get_uuid(event.name_or_uuid)
-        return req.GetSingleDataset(uuid)
+        return await self.client.request(req.GetSingleDataset(uuid))
 
 
 @requires_valid_project_uuid
@@ -174,10 +270,10 @@ class RemoteUploadDatasetHandler(RemoteEventHandler):
     project_uuid: str
 
     async def handle(self, event: UploadDataset, mediator: Mediator):
-        return await UploadResource(
+        return await ft.UploadResource(
             file=event.file,
             parent_uuid=self.project_uuid,
-            strategy=DatasetUploadStrategy(self.client),
+            strategy=ft.DatasetUploadStrategy(self.client),
             name_or_uuid=event.name_or_uuid,
         )
 
@@ -188,8 +284,10 @@ class RemoteUploadMultipleDatasetsHandler(RemoteEventHandler):
     project_uuid: str
 
     async def handle(self, event: UploadMultipleDatasets, mediator: Mediator):
-        return await UploadMultipleResources(
-            event.directory, self.project_uuid, strategy=DatasetUploadStrategy(client=self.client)
+        return await ft.UploadMultipleResources(
+            event.directory,
+            self.project_uuid,
+            strategy=ft.DatasetUploadStrategy(client=self.client),
         )
 
 
@@ -201,7 +299,7 @@ class RemoteDownloadDatasetHandler(RemoteEventHandler):
     async def handle(self, event: DownloadDataset, mediator: Mediator):
         dataset = await DatasetQuery(self.project_uuid).by_name_or_uuid(event.name_or_uuid)
         file = event.directory.datasets.joinpath(dataset["name"])
-        return await DownloadResource(
+        return await ft.DownloadResource(
             file=file,
             request=req.GetDatasetData(dataset["uuid"]),
         )
@@ -213,7 +311,7 @@ class RemoteDownloadMultipleDatasets(RemoteEventHandler):
     project_uuid: str
 
     async def handle(self, event: DownloadMultipleDatasets, mediator: Mediator):
-        await DownloadDatasets(
+        await ft.DownloadDatasets(
             {"uuid": self.project_uuid},
             directory=event.directory,
         )
@@ -231,19 +329,206 @@ class RemoteEditDataset(RemoteEventHandler):
         await self.client.request(req.UpdateDataset(uuid, payload=result))
 
 
-ALL_HANDLERS = (
-    RemoteRequestHandler,
-    RemoteGetAllProjectsHandler,
-    RemoteGetDatasetTypesHandler,
-    RemoteGetAllDatasetsHandler,
-    RemoteGetSingleDatasetHandler,
-    RemoteCreateDatasetHandler,
-    RemoteUpdateDatasetHandler,
-    RemoteDeleteDatasetHandler,
-    RemoteClearDatasetHandler,
-    RemoteUploadDatasetHandler,
-    RemoteUploadMultipleDatasetsHandler,
-    RemoteDownloadDatasetHandler,
-    RemoteDownloadMultipleDatasets,
-    RemoteEditDataset,
-)
+@requires_valid_project_uuid
+class RemoteGetAllScenariosHandler(RemoteEventHandler):
+    __event__ = GetAllScenarios
+    project_uuid: str
+
+    async def handle(self, event: GetAllScenarios, mediator: Mediator):
+        return await self.client.request(req.GetScenarios(project_uuid=self.project_uuid))
+
+
+@requires_valid_project_uuid
+class RemoteGetSingleScenarioHandler(RemoteEventHandler):
+    __event__ = GetSingleScenario
+    project_uuid: str
+
+    async def handle(self, event: GetSingleScenario, mediator: Mediator):
+        uuid = await ScenarioQuery(self.project_uuid).get_uuid(event.name_or_uuid)
+        return await self.client.request(req.GetSingleScenario(uuid))
+
+
+@requires_valid_project_uuid
+class RemoteCreateScenarioHandler(RemoteEventHandler):
+    __event__ = CreateScenario
+    project_uuid: str
+
+    async def handle(self, event: CreateScenario, mediator: Mediator):
+        return await self.client.request(req.CreateScenario(self.project_uuid, event.payload))
+
+
+@requires_valid_project_uuid
+class RemoteDeleteScenarioHandler(RemoteEventHandler):
+    __event__ = DeleteScenario
+    project_uuid: str
+
+    async def handle(self, event: DeleteScenario, mediator: Mediator):
+        async with self.client:
+            uuid = await ScenarioQuery(self.project_uuid).get_uuid(event.name_or_uuid)
+
+            confirm(
+                f"Are you sure you wish to delete scenario '{event.name_or_uuid}' "
+                "and all its data?"
+            )
+            return await self.client.request(req.DeleteScenario(uuid))
+
+
+@requires_valid_project_uuid
+class RemoteClearScenarioHandler(RemoteEventHandler):
+    __event__ = ClearScenario
+    project_uuid: str
+
+    async def handle(self, event: ClearScenario, mediator: Mediator):
+        def on_error(resp):
+            return resp.status_code != 404
+
+        async with self.client:
+            uuid = await ScenarioQuery(self.project_uuid).get_uuid(event.name_or_uuid)
+
+            if event.confirm:
+                confirm(
+                    f"Are you sure you wish to clear scenario '{event.name_or_uuid}' "
+                    "of its simulation results?"
+                )
+
+            await asyncio.gather(
+                self.client.request(req.DeleteTimeline(uuid), on_error=on_error),
+                self.client.request(req.DeleteSimulation(uuid), on_error=on_error),
+                wait_until_simulation_is_reset(self.client, uuid),
+            )
+
+
+@requires_valid_project_uuid
+class RemoteRunSimulationHandler(RemoteEventHandler):
+    __event__ = RunSimulation
+    project_uuid: str
+
+    async def handle(self, event: RunSimulation, mediator: Mediator):
+        async with self.client:
+            scenario = await ScenarioQuery(self.project_uuid).by_name_or_uuid(event.name_or_uuid)
+            uuid, has_timeline = scenario["uuid"], scenario["has_timeline"]
+            if has_timeline:
+                do_overwrite = resolve_question_flag(
+                    self.params.overwrite,
+                    (
+                        f"Scenario {event.name_or_uuid} already has simulation results, "
+                        "do you wish to overwrite?"
+                    ),
+                )
+                if not do_overwrite:
+                    echo(
+                        "Cowardly refusing to overwrite simulation results for "
+                        f"'{event.name_or_uuid}'"
+                    )
+                    return
+                await mediator.send(ClearScenario(event.name_or_uuid, confirm=False))
+
+            await self.client.request(req.RunSimulation(uuid))
+
+
+async def wait_until_simulation_is_reset(client: AsyncClient, uuid, interval=1):
+    has_simulation = True
+
+    def on_error(resp):
+        nonlocal has_simulation
+        if resp.status_code == 404:
+            has_simulation = False
+            return False
+
+    while has_simulation:
+        await client.request(req.GetSimulation(uuid), on_error=on_error)
+        await asyncio.sleep(interval)
+
+
+@requires_valid_project_uuid
+class RemoteUploadScenarioHandler(RemoteEventHandler):
+    __event__ = UploadScenario
+    project_uuid: str
+
+    async def handle(self, event: UploadScenario, mediator: Mediator):
+        return await ft.UploadScenario(
+            file=event.file,
+            parent_uuid=self.project_uuid,
+            name_or_uuid=event.name_or_uuid,
+        )
+
+
+@requires_valid_project_uuid
+class RemoteUploadMultipleScenariosHandler(RemoteEventHandler):
+    __event__ = UploadMultipleScenarios
+    project_uuid: str
+
+    async def handle(self, event: UploadMultipleScenarios, mediator: Mediator):
+        return await ft.UploadMultipleResources(
+            event.directory,
+            self.project_uuid,
+            strategy=ft.ScenarioUploadStrategy(client=self.client),
+        )
+
+
+@requires_valid_project_uuid
+class RemoteDownloadScenarioHandler(RemoteEventHandler):
+    __event__ = DownloadScenario
+    project_uuid: str
+
+    async def handle(self, event: DownloadScenario, mediator: Mediator):
+        scenario = await ScenarioQuery(self.project_uuid).by_name_or_uuid(event.name_or_uuid)
+        return await ft.DownloadSingleScenario(
+            parent=scenario,
+            directory=event.directory,
+        )
+
+
+@requires_valid_project_uuid
+class RemoteDownloadMultipleScenarios(RemoteEventHandler):
+    __event__ = DownloadMultipleScenarios
+    project_uuid: str
+
+    async def handle(self, event: DownloadMultipleScenarios, mediator: Mediator):
+        await ft.DownloadScenarios(
+            {"uuid": self.project_uuid}, directory=event.directory, progress=False
+        )
+
+
+@requires_valid_project_uuid
+class RemoteEditScenario(RemoteEventHandler):
+    __event__ = EditScenario
+    project_uuid: str
+
+    async def handle(self, event: EditScenario, mediator: Mediator):
+        current = await mediator.send(GetSingleScenario(event.name_or_uuid))
+        uuid = current["uuid"]
+        result = edit_resource(current)
+        await self.client.request(req.UpdateScenario(uuid, payload=result))
+
+
+class RemoteGetScopes(RemoteEventHandler):
+    __event__ = GetScopes
+
+    async def handle(self, event: GetScopes, mediator: Mediator):
+        return await self.client.request(req.GetScopes())
+
+
+class RemoteCreateScope(RemoteEventHandler):
+    __event__ = CreateScope
+
+    async def handle(self, event: CreateScope, mediator: Mediator):
+        return await self.client.request(req.CreateScope(event.name))
+
+
+class RemoteDeleteScope(RemoteEventHandler):
+    __event__ = DeleteScope
+
+    async def handle(self, event: DeleteScope, mediator: Mediator):
+        uuid = await ScopeQuery().get_uuid(event.name_or_uuid)
+
+        if event.confirm:
+            confirm(f"Are you sure you wish to delete scope '{event.name_or_uuid}'")
+        return await self.client.request(req.DeleteScope(uuid))
+
+
+ALL_HANDLERS = [
+    obj
+    for obj in globals().values()
+    if isinstance(obj, type) and obj is not EventHandler and issubclass(obj, EventHandler)
+]

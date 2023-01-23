@@ -4,6 +4,7 @@ from movici_api_client.cli.controllers.dataset_types import DatasetTypeControlle
 from movici_api_client.cli.controllers.datasets import DatasetController
 from movici_api_client.cli.controllers.projects import ProjectController
 from movici_api_client.cli.controllers.scenarios import ScenarioController
+from movici_api_client.cli.controllers.scopes import ScopeController
 from movici_api_client.cli.controllers.views import ViewController
 from movici_api_client.cli.main import (
     activate_project,
@@ -23,6 +24,7 @@ cli_factory(
         ViewController,
         DatasetTypeController,
         ConfigController,
+        ScopeController,
     ],
     on_error=handle_global_error,
 )()

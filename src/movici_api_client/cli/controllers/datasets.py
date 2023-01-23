@@ -1,9 +1,9 @@
 import pathlib
 
-from movici_api_client.api.requests import DeleteDatasetData
 from movici_api_client.cli.events.dataset import (
     ClearDataset,
     CreateDataset,
+    DeleteDataset,
     DownloadDataset,
     DownloadMultipleDatasets,
     EditDataset,
@@ -90,7 +90,7 @@ class DatasetController(Controller):
     @format_output
     @handle_event
     def delete(self, name_or_uuid):
-        return DeleteDatasetData(name_or_uuid)
+        return DeleteDataset(name_or_uuid)
 
     @command
     @argument("name_or_uuid")

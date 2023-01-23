@@ -1,7 +1,7 @@
 import gimme
 
 from movici_api_client.api.client import AsyncClient
-from movici_api_client.api.requests import GetDatasets, GetProjects, GetScenarios
+from movici_api_client.api.requests import GetDatasets, GetProjects, GetScenarios, GetScopes
 from movici_api_client.cli.exceptions import InvalidResource
 from movici_api_client.cli.utils import validate_uuid
 
@@ -49,6 +49,13 @@ class ProjectQuery(ResourceQuery):
 
     def request_all(self):
         return GetProjects()
+
+
+class ScopeQuery(ResourceQuery):
+    resource_type = "scope"
+
+    def request_all(self):
+        return GetScopes()
 
 
 class DatasetQuery(ResourceQuery):

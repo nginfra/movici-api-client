@@ -176,8 +176,11 @@ def simple_request(func):
 
 def unwrap_envelope(envelope):
     def decorator(cls: Request):
+        original = cls.make_response
+
         def make_response(self, resp: Response):
-            return resp.json()[envelope]
+            result = original(self, resp)
+            return result[envelope]
 
         cls.make_response = make_response
         return cls

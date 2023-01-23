@@ -35,7 +35,6 @@ def remove_options(obj, key: str):
 
 @dataclasses.dataclass
 class CLIParameters:
-
     overwrite: t.Optional[bool] = None
     no_overwrite: t.Optional[bool] = None
     create: t.Optional[bool] = None
@@ -44,6 +43,7 @@ class CLIParameters:
     no: t.Optional[bool] = None
     with_simulation: t.Optional[bool] = None
     with_views: t.Optional[bool] = None
+    output: t.Optional[str] = None
 
 
 class Controller:

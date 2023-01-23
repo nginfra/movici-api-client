@@ -145,36 +145,31 @@ class UploadMultipleResources(Task):
 class UploadScenario(Task):
     def __init__(
         self,
-        client: IAsyncClient,
         file: pathlib.Path,
         parent_uuid: str,
         name_or_uuid=None,
         all_resources=None,
         strategy: UploadStrategy = None,
-        **kwargs,
     ):
-        self.client = client
         self.file = file
         self.parent_uuid = parent_uuid
         self.name_or_uuid = name_or_uuid
         self.all_resources = all_resources
         self.strategy = strategy or ScenarioUploadStrategy(self.client)
-        self.kwargs = kwargs
 
     async def run(self) -> t.Optional[bool]:
         uuid = await UploadResource(
-            client=self.client,
             file=self.file,
             parent_uuid=self.parent_uuid,
+            strategy=self.strategy,
             name_or_uuid=self.name_or_uuid,
             all_resources=self.all_resources,
-            strategy=self.strategy,
         ).run()
         if uuid is None:
             return
-        if self.kwargs.get("with_simulation"):
+        if self.params.with_simulation:
             await self.upload_simulation(uuid)
-        if self.kwargs.get("with_views"):
+        if self.params.with_views:
             await self.upload_views(uuid)
 
     async def upload_simulation(self, uuid):
@@ -191,7 +186,6 @@ class UploadScenario(Task):
             scenario_dir,
             parent_uuid=uuid,
             scenario=scenario,
-            description=self.kwargs.get("description"),
         )
 
     async def upload_views(self, uuid):
@@ -199,7 +193,6 @@ class UploadScenario(Task):
         scenario_name = self.file.stem
         strategy = ViewUploadStrategy(self.client, scenario=scenario_name)
         await UploadMultipleResources(
-            client=self.client,
             directory=movici_dir,
             parent_uuid=uuid,
             strategy=strategy,
@@ -215,13 +208,11 @@ class UploadTimeline(Task):
         directory: DataDir,
         parent_uuid: str,
         scenario: dict = None,
-        description: str = None,
     ):
         self.client = client
         self.directory = directory
         self.parent_uuid = parent_uuid
         self.scenario = scenario
-        self.description = description
 
     async def run(self) -> t.Optional[bool]:
         async with self.client:
@@ -229,11 +220,11 @@ class UploadTimeline(Task):
             await self.recreate_timeline(scenario)
             await ParallelTaskGroup(
                 (
-                    UploadUpdate(self.client, self.parent_uuid, file)
+                    UploadUpdate(self.parent_uuid, file)
                     for file in self.directory.iter_updates(scenario["name"])
                 ),
                 progress=True,
-                description=self.description or "Uploading updates",
+                description=self.scenario["name"],
             ).run()
 
     async def recreate_timeline(self, scenario: dict):

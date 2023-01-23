@@ -4,11 +4,10 @@ import typing as t
 
 import gimme
 
-from movici_api_client.api import Client, Request, Response
+from movici_api_client.api import Client, Response
 from movici_api_client.api.requests import CheckAuthToken
 from movici_api_client.cli.controllers.common import resolve_data_directory
 from movici_api_client.cli.cqrs import Event, Mediator
-from movici_api_client.cli.events import MakeRequest
 
 from . import dependencies
 from .common import (
@@ -28,6 +27,7 @@ from .exceptions import (
 )
 from .ui import format_anything, format_table
 from .utils import (
+    Choice,
     DirPath,
     assert_current_context,
     echo,
@@ -151,15 +151,13 @@ def valid_project_uuid(func):
 def upload_options(func):
     return combine_decorators(
         [
-            option("-o", "--overwrite", is_flag=True, help="Always overwrite"),
-            option("-c", "--create", is_flag=True, help="Always create if necessary"),
-            option(
-                "-y",
-                "--yes",
-                is_flag=True,
-                help="Answer yes to all questions, equivalent to -o -c",
-            ),
+            option("--overwrite", is_flag=True, help="Always overwrite"),
+            option("--create", is_flag=True, help="Always create if necessary"),
+            option("-y", "--yes", is_flag=True, help="Answer yes to all questions"),
             option("-n", "--no", is_flag=True, help="Answer no to all questions"),
+            option(
+                "-o", "--output", type=Choice(["json"], case_sensitive=False), help="output format"
+            ),
         ]
     )(func)
 
@@ -207,16 +205,16 @@ _CLI_OPTIONS = {
         is_flag=True,
         help="read files to infer meta data and enforce consistency",
     ),
-    "create": option("-c", "--create", is_flag=True, help="Always create if necessary"),
-    "overwrite": option("-o", "--overwrite", is_flag=True, help="Always overwrite"),
+    "create": option("--create", is_flag=True, help="Always create if necessary"),
+    "overwrite": option("--overwrite", is_flag=True, help="Always overwrite"),
     "no_overwrite": option("-n", "--no-overwrite", is_flag=True, help="Never overwrite"),
-    "yes": option(
-        "-y",
-        "--yes",
-        is_flag=True,
-        help="Answer yes to all questions",
-    ),
+    "yes": option("-y", "--yes", is_flag=True, help="Answer yes to all questions"),
     "no": option("-n", "--no", is_flag=True, help="Answer no to all questions"),
+    "output": option(
+        "-o", "--output", type=Choice(["json"], case_sensitive=False), help="output format"
+    ),
+    "with_simulation": option("--with-simulation", is_flag=True),
+    "with_views": option("--with-views", is_flag=True),
 }
 
 
@@ -270,12 +268,8 @@ def handle_event(func=None, *, success_message=None):
     @functools.wraps(func)
     def _wrapper(*args, **kwargs):
         event = func(*args, **kwargs)
-        if isinstance(event, Request):
-            event = MakeRequest(event)
-        if not isinstance(event, (Event, Request)):
-            raise TypeError(
-                "A function decorated with 'handle_event' must return an Event or a Request"
-            )
+        if not isinstance(event, Event):
+            raise TypeError("A function decorated with 'handle_event' must return an Event")
 
         mediator = gimme.that(Mediator)
         result = asyncio.run(mediator.send(event))

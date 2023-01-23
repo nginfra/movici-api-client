@@ -126,6 +126,7 @@ class DownloadDatasets(RecursivelyDownloadResource):
                 continue_after_failed_overwrite=True,
             )
             for ds in resources
+            if ds["has_data"]
         )
 
 
