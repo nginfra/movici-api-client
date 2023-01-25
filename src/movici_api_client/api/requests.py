@@ -88,6 +88,7 @@ class DeleteScope(AuthRequest):
         }
 
 
+@dataclasses.dataclass
 @unwrap_envelope("projects")
 class GetProjects(DataEngineRequest):
     @simple_request
@@ -452,6 +453,7 @@ class DeleteView(DataEngineRequest):
         }
 
 
+@dataclasses.dataclass
 @unwrap_envelope("dataset_types")
 class GetDatasetTypes(DataEngineRequest):
     @simple_request

@@ -87,7 +87,7 @@ class ScenarioController(Controller):
             "models": [],
             "datasets": [],
         }
-        return CreateScenario(name, payload)
+        return CreateScenario(payload)
 
     @command
     @argument("name_or_uuid")
@@ -119,7 +119,7 @@ class ScenarioController(Controller):
         return UploadScenario(name_or_uuid, file)
 
     @command(name="scenarios", group="upload")
-    @data_directory_option(purpose="datasets")
+    @data_directory_option(purpose="scenarios")
     @cli_options("overwrite", "create", "yes", "no", "inspect", "with_simulation", "with_views")
     @handle_event(success_message="Success!")
     def upload_multiple(self, directory):
@@ -127,7 +127,7 @@ class ScenarioController(Controller):
 
     @command
     @argument("name_or_uuid")
-    @data_directory_option(purpose="datasets")
+    @data_directory_option(purpose="scenarios")
     @cli_options("overwrite", "yes", "no", "with_simulation", "with_views")
     @handle_event(success_message="Success!")
     def download(self, name_or_uuid, directory):

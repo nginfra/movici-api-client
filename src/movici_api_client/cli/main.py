@@ -10,7 +10,7 @@ from movici_api_client.api.common import parse_service_urls
 from movici_api_client.cli.cqrs import Mediator
 from movici_api_client.cli.data_dir import MoviciDataDir
 from movici_api_client.cli.exceptions import InvalidResource
-from movici_api_client.cli.handlers import REMOTE_HANDLERS, get_handlers_dict
+from movici_api_client.cli.handlers import REMOTE_HANDLERS
 
 from . import dependencies
 from .config import Config, get_config, write_config
@@ -53,8 +53,7 @@ def setup_mediator(config: Config):
     context = config.current_context
 
     if context is not None and not context.get("local"):
-        handlers = get_handlers_dict(REMOTE_HANDLERS)
-        return Mediator(handlers)
+        return Mediator(REMOTE_HANDLERS)
     return Mediator()
 
 

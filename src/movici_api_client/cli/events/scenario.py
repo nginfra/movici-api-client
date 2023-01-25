@@ -18,7 +18,6 @@ class GetSingleScenario(Event):
 
 @dataclasses.dataclass
 class CreateScenario(Event):
-    name: str
     payload: dict
 
 

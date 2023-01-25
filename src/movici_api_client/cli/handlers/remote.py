@@ -56,21 +56,25 @@ def requires_valid_project_uuid(cls: t.Type[EventHandler]):
     original = cls.handle
 
     async def handle(self, event: Event, mediator: Mediator):
-        context = assert_current_context()
-        proj_name = context.get("project")
-        if not proj_name:
-            raise NoActiveProject()
-        projects = await mediator.send(GetAllProjects())
-        projects_dict = {p["name"]: p["uuid"] for p in projects}
-        try:
-            self.project_uuid = projects_dict[proj_name]
-        except KeyError:
-            raise InvalidActiveProject(proj_name)
-
+        project_uuid = await _valid_project_uuid_from_context(mediator)
+        self.project_uuid = project_uuid
         return await original(self, event, mediator)
 
     cls.handle = handle
     return cls
+
+
+async def _valid_project_uuid_from_context(mediator: Mediator):
+    context = assert_current_context()
+    proj_name = context.get("project")
+    if not proj_name:
+        raise NoActiveProject()
+    projects = await mediator.send(GetAllProjects())
+    projects_dict = {p["name"]: p["uuid"] for p in projects}
+    try:
+        return projects_dict[proj_name]
+    except KeyError:
+        raise InvalidActiveProject(proj_name)
 
 
 class RemoteEventHandler(EventHandler):
@@ -480,7 +484,7 @@ class RemoteDownloadScenarioHandler(RemoteEventHandler):
 
 
 @requires_valid_project_uuid
-class RemoteDownloadMultipleScenarios(RemoteEventHandler):
+class RemoteDownloadMultipleScenariosHandler(RemoteEventHandler):
     __event__ = DownloadMultipleScenarios
     project_uuid: str
 
@@ -491,7 +495,7 @@ class RemoteDownloadMultipleScenarios(RemoteEventHandler):
 
 
 @requires_valid_project_uuid
-class RemoteEditScenario(RemoteEventHandler):
+class RemoteEditScenarioHandler(RemoteEventHandler):
     __event__ = EditScenario
     project_uuid: str
 
@@ -502,21 +506,21 @@ class RemoteEditScenario(RemoteEventHandler):
         await self.client.request(req.UpdateScenario(uuid, payload=result))
 
 
-class RemoteGetScopes(RemoteEventHandler):
+class RemoteGetScopesHandler(RemoteEventHandler):
     __event__ = GetScopes
 
     async def handle(self, event: GetScopes, mediator: Mediator):
         return await self.client.request(req.GetScopes())
 
 
-class RemoteCreateScope(RemoteEventHandler):
+class RemoteCreateScopeHandler(RemoteEventHandler):
     __event__ = CreateScope
 
     async def handle(self, event: CreateScope, mediator: Mediator):
         return await self.client.request(req.CreateScope(event.name))
 
 
-class RemoteDeleteScope(RemoteEventHandler):
+class RemoteDeleteScopeHandler(RemoteEventHandler):
     __event__ = DeleteScope
 
     async def handle(self, event: DeleteScope, mediator: Mediator):
@@ -527,8 +531,8 @@ class RemoteDeleteScope(RemoteEventHandler):
         return await self.client.request(req.DeleteScope(uuid))
 
 
-ALL_HANDLERS = [
-    obj
+ALL_HANDLERS = {
+    obj.__event__: obj
     for obj in globals().values()
     if isinstance(obj, type) and obj is not EventHandler and issubclass(obj, EventHandler)
-]
+}
