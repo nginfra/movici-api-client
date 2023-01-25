@@ -69,7 +69,7 @@ project_uuid = str(uuid.UUID(int=2))
 @pytest.fixture
 def current_context():
     with patch.object(movici_api_client.cli.handlers.remote, "assert_current_context") as mock:
-        mock.return_value = Context("dummy", url="", project="some_project")
+        mock.return_value = Context("dummy", location="", project="some_project")
         yield mock
 
 

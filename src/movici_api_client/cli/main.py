@@ -41,7 +41,7 @@ def setup_client(config: Config):
         return Client()
     auth = MoviciTokenAuth(auth_token=context.get("auth_token")) if context.get("auth") else False
     return Client(
-        base_url=context.url,
+        base_url=context.location,
         auth=auth,
         on_error=handle_http_error,
         service_urls=parse_service_urls(context, prefix="service."),
@@ -90,7 +90,7 @@ def handle_global_error(exc: Exception):
 def login(ask_username):
     client = dependencies.get(Client)
     context = assert_current_context()
-    echo(f"Login to {context.url}:")
+    echo(f"Login to {context.location}:")
     LoginController(client, context).login(ask_username)
     write_config()
     echo("Success!")

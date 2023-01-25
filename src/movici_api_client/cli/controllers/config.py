@@ -1,3 +1,5 @@
+import pathlib
+
 import gimme
 
 from movici_api_client.cli.config import Config, Context, write_config
@@ -23,8 +25,9 @@ class ConfigController(Controller):
 
         echo("Creating a new context, please give the following information")
         name = name or prompt("Name")
-        url = prompt("Base URL (eg: https://example.org/)")
-        context = Context(name, url)
+        is_local = confirm("Is this a local context?", abort=False)
+        location = get_local_location() if is_local else get_remote_location()
+        context = Context(name, location)
         config.add_context(context)
 
         activate = confirm("Do you wish to activate this context?", default=True)
@@ -84,3 +87,12 @@ class ConfigController(Controller):
 
         write_config(config)
         echo("Context succesfully updated")
+
+
+def get_remote_location():
+    return prompt("Base URL (eg: https://example.org/)")
+
+
+def get_local_location():
+    result = prompt("Path (eg: ~/movici)")
+    return str(pathlib.Path(result).resolve())

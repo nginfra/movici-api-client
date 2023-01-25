@@ -145,11 +145,11 @@ class Context(dict):
     __special_keys__ = {
         "auth": SpecialKey(parse=parse_bool, default=True),
         "name": SpecialKey(required=True),
-        "url": SpecialKey(required=True),
+        "location": SpecialKey(required=True),
     }
 
-    def __init__(self, name: str, url: str, **kwargs) -> None:
-        super().__init__(name=name, url=url, **kwargs)
+    def __init__(self, name: str, location: str, **kwargs) -> None:
+        super().__init__(name=name, location=location, **kwargs)
 
     def __getattribute__(self, name):
         if name in type(self).__special_keys__:
@@ -187,8 +187,7 @@ class Context(dict):
     def __eq__(self, __o: object) -> bool:
         if not isinstance(__o, Context):
             return False
-
-        return all((self.name == __o.name, self.url == __o.url, super().__eq__(__o)))
+        return super().__eq__(__o)
 
     def as_dict(self):
-        return {"name": self.name, "url": self.url, **self}
+        return {"name": self.name, "location": self.location, **self}
