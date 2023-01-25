@@ -1,16 +1,18 @@
 import asyncio
 import typing as t
 
+import gimme
 from tqdm.auto import tqdm
 
 from movici_api_client.api.common import IAsyncClient
+from movici_api_client.cli.common import CLIParameters
 
 from ..utils import confirm
 
 
 class Task:
-    def __init__(self, client: IAsyncClient) -> None:
-        self.client = client
+    client: IAsyncClient = gimme.attribute(IAsyncClient)
+    params: CLIParameters = gimme.attribute(CLIParameters)
 
     async def run(self) -> t.Optional[bool]:
         raise NotImplementedError
@@ -24,7 +26,6 @@ class Task:
 
 class SequentialTaskGroup(Task):
     def __init__(self, tasks: t.Sequence[Task], progress=False, description=None) -> None:
-        super().__init__(None)
         self.tasks = tasks
         self.progress = progress
         self.description = description
@@ -43,7 +44,6 @@ class SequentialTaskGroup(Task):
 
 class ParallelTaskGroup(Task):
     def __init__(self, tasks: t.Iterable[Task], progress=False, description=None) -> None:
-        super().__init__(None)
         self.tasks = tasks
         self.progress = progress
         self.description = description

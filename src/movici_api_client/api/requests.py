@@ -48,6 +48,47 @@ class CheckAuthToken(AuthRequest):
         return req
 
 
+@dataclasses.dataclass
+class GetScopes(AuthRequest):
+    @simple_request
+    def make_request(self):
+        return "scopes"
+
+    def make_response(self, resp):
+        result = resp.json()
+        return [
+            {
+                "name": s["scope_name"],
+                "uuid": s["scope_uuid"],
+            }
+            for s in result["scopes"]
+        ]
+
+
+@dataclasses.dataclass
+class CreateScope(AuthRequest):
+    name: str
+
+    def make_request(self):
+        return {
+            "method": "POST",
+            "url": "scopes",
+            "json": {"scope_name": self.name},
+        }
+
+
+@dataclasses.dataclass
+class DeleteScope(AuthRequest):
+    uuid: str
+
+    def make_request(self):
+        return {
+            "method": "DELETE",
+            "url": urljoin("scopes", self.uuid),
+        }
+
+
+@dataclasses.dataclass
 @unwrap_envelope("projects")
 class GetProjects(DataEngineRequest):
     @simple_request
@@ -412,6 +453,7 @@ class DeleteView(DataEngineRequest):
         }
 
 
+@dataclasses.dataclass
 @unwrap_envelope("dataset_types")
 class GetDatasetTypes(DataEngineRequest):
     @simple_request

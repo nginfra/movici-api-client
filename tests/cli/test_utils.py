@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from movici_api_client.cli.common import OPTIONS_COMMAND, has_options
+from movici_api_client.cli.common import OPTIONS_COMMAND, Controller, has_options
 from movici_api_client.cli.decorators import command
 from movici_api_client.cli.utils import iter_commands, maybe_set_flag, validate_uuid
 
@@ -16,7 +16,7 @@ def test_command():
 
 
 def test_iter_commands():
-    class Object:
+    class Object(Controller):
         @command
         def func(self):
             pass
@@ -32,7 +32,7 @@ def test_iter_commands():
 
 
 def test_iter_commands_override():
-    class A:
+    class A(Controller):
         @command
         def func(self):
             pass

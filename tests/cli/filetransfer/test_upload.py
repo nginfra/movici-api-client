@@ -1,4 +1,3 @@
-import functools
 import json
 from unittest.mock import Mock, call, patch
 
@@ -7,6 +6,7 @@ import pytest
 import movici_api_client.cli.filetransfer.common
 import movici_api_client.cli.filetransfer.upload
 from movici_api_client.api.client import AsyncClient
+from movici_api_client.cli.common import CLIParameters
 from movici_api_client.cli.filetransfer import (
     DatasetUploadStrategy,
     UploadResource,
@@ -47,47 +47,52 @@ class TestUploadResource:
     def upload_file(self, add_dataset):
         return add_dataset("dataset", {"type": "some_type"})
 
+    @pytest.fixture(autouse=True)
+    def async_client(self, gimme_repo):
+        gimme_repo.add(AsyncClient(""))
+
     @pytest.fixture
-    def make_task(self, upload_file, strategy):
+    def make_task(self, upload_file, strategy, gimme_repo):
         project_uuid = "0000-0000"
-        return functools.partial(
-            UploadResource,
-            parent_uuid=project_uuid,
-            client=AsyncClient(""),
-            file=upload_file,
-            strategy=strategy,
-        )
+
+        def _make_task(overwrite=None, create_new=None, inspect=None, **kwargs):
+            gimme_repo.add(CLIParameters(overwrite=overwrite, create=create_new, inspect=inspect))
+            return UploadResource(
+                file=upload_file, parent_uuid=project_uuid, strategy=strategy, **kwargs
+            )
+
+        return _make_task
 
     @pytest.mark.asyncio
     async def test_upload_ensures_resources(self, make_task, strategy):
-        task = make_task(overwrite=False, create_new=True, inspect_file=False)
+        task = make_task(overwrite=False, create_new=True, inspect=False)
         await task.run()
         assert strategy.get_all.await_count == 1
 
     @pytest.mark.asyncio
     async def test_creates_new_if_not_exists(self, make_task, strategy, upload_file):
-        task = make_task(overwrite=False, create_new=True, inspect_file=False)
+        task = make_task(overwrite=False, create_new=True, inspect=False)
         await task.run()
 
         assert strategy.create_new.await_args == call(
-            task.parent_uuid, file=upload_file, name=upload_file.stem, inspect_file=False
+            task.parent_uuid, file=upload_file, name=upload_file.stem, inspect=False
         )
 
     @pytest.mark.asyncio
     async def test_create_new_can_override_name(self, make_task, strategy, upload_file):
         strategy.get_all.return_value = []
         task = make_task(
-            overwrite=False, create_new=True, inspect_file=False, name_or_uuid="alternative"
+            overwrite=False, create_new=True, inspect=False, name_or_uuid="alternative"
         )
         await task.run()
         assert strategy.create_new.await_args == call(
-            task.parent_uuid, file=upload_file, name="alternative", inspect_file=False
+            task.parent_uuid, file=upload_file, name="alternative", inspect=False
         )
 
     @pytest.mark.asyncio
     async def test_doesnt_create_new_when_flag_not_set(self, make_task, strategy):
         strategy.get_all.return_value = []
-        task = make_task(overwrite=False, create_new=False, inspect_file=False)
+        task = make_task(overwrite=False, create_new=False, inspect=False)
         await task.run()
         assert strategy.create_new.await_count == 0
 
@@ -95,7 +100,7 @@ class TestUploadResource:
     async def test_checks_overwrite_required_on_existing(self, make_task, strategy):
         existing = {"name": "dataset"}
         strategy.get_all.return_value = [existing]
-        task = make_task(overwrite=True, create_new=False, inspect_file=False)
+        task = make_task(overwrite=True, create_new=False, inspect=False)
         await task.run()
         assert strategy.require_overwrite_question.call_args == call(existing)
 
@@ -103,7 +108,7 @@ class TestUploadResource:
     async def test_overwrites_on_existing(self, make_task, strategy, upload_file):
         existing = {"name": "dataset"}
         strategy.get_all.return_value = [existing]
-        task = make_task(overwrite=True, create_new=False, inspect_file=False)
+        task = make_task(overwrite=True, create_new=False, inspect=False)
         await task.run()
         assert strategy.update_existing.await_args == call(existing, upload_file, False)
 
@@ -123,7 +128,7 @@ class TestUploadResource:
         strategy.get_all.return_value = [{"name": "dataset"}]
         strategy.require_overwrite_question.return_value = require_overwrite_question
 
-        task = make_task(overwrite=determine_overwrite, create_new=False, inspect_file=False)
+        task = make_task(overwrite=determine_overwrite, create_new=False, inspect=False)
         await task.run()
 
         assert strategy.update_existing.await_count == int(update_called)
@@ -139,7 +144,7 @@ class TestUploadResource:
     )
     @pytest.mark.asyncio
     async def test_maybe_questions(self, flag, confirm, expected, make_task):
-        task = make_task(overwrite=False, create_new=False, inspect_file=False)
+        task = make_task(overwrite=False, create_new=False, inspect=False)
         with patch.object(movici_api_client.cli.filetransfer.common, "confirm") as mock:
             mock.return_value = confirm
             assert task.determine_create_new(flag, "some_name") == expected

@@ -1,15 +1,40 @@
+import asyncio
 import functools
 import typing as t
+
+import gimme
 
 from movici_api_client.api import Client, Response
 from movici_api_client.api.requests import CheckAuthToken
 from movici_api_client.cli.controllers.common import resolve_data_directory
+from movici_api_client.cli.cqrs import Event, Mediator
 
 from . import dependencies
-from .common import OPTIONS_COMMAND, Controller, get_options, has_options, set_options
-from .exceptions import InvalidActiveProject, MoviciCLIError, NoActiveProject, Unauthenticated
+from .common import (
+    OPTIONS_COMMAND,
+    CLIParameters,
+    Controller,
+    get_options,
+    has_options,
+    set_options,
+)
+from .exceptions import (
+    InvalidActiveProject,
+    InvalidUsage,
+    MoviciCLIError,
+    NoActiveProject,
+    Unauthenticated,
+)
 from .ui import format_anything, format_table
-from .utils import DirPath, assert_current_context, echo, get_project_uuids, handle_movici_error
+from .utils import (
+    Choice,
+    DirPath,
+    assert_current_context,
+    echo,
+    get_project_uuids,
+    handle_movici_error,
+    maybe_set_flag,
+)
 
 
 def catch_exceptions(func):
@@ -126,15 +151,13 @@ def valid_project_uuid(func):
 def upload_options(func):
     return combine_decorators(
         [
-            option("-o", "--overwrite", is_flag=True, help="Always overwrite"),
-            option("-c", "--create", is_flag=True, help="Always create if necessary"),
-            option(
-                "-y",
-                "--yes",
-                is_flag=True,
-                help="Answer yes to all questions, equivalent to -o -c",
-            ),
+            option("--overwrite", is_flag=True, help="Always overwrite"),
+            option("--create", is_flag=True, help="Always create if necessary"),
+            option("-y", "--yes", is_flag=True, help="Answer yes to all questions"),
             option("-n", "--no", is_flag=True, help="Answer no to all questions"),
+            option(
+                "-o", "--output", type=Choice(["json"], case_sensitive=False), help="output format"
+            ),
         ]
     )(func)
 
@@ -173,3 +196,85 @@ def combine_decorators(decorators: t.Iterable[callable]):
         )
 
     return decorator
+
+
+_CLI_OPTIONS = {
+    "inspect": option(
+        "-i",
+        "--inspect",
+        is_flag=True,
+        help="read files to infer meta data and enforce consistency",
+    ),
+    "create": option("--create", is_flag=True, help="Always create if necessary"),
+    "overwrite": option("--overwrite", is_flag=True, help="Always overwrite"),
+    "no_overwrite": option("-n", "--no-overwrite", is_flag=True, help="Never overwrite"),
+    "yes": option("-y", "--yes", is_flag=True, help="Answer yes to all questions"),
+    "no": option("-n", "--no", is_flag=True, help="Answer no to all questions"),
+    "output": option(
+        "-o", "--output", type=Choice(["json"], case_sensitive=False), help="output format"
+    ),
+    "with_simulation": option("--with-simulation", is_flag=True),
+    "with_views": option("--with-views", is_flag=True),
+}
+
+
+def cli_options(*options: str):
+    click_options = combine_decorators(_CLI_OPTIONS[option] for option in options)
+
+    def decorator(func):
+        @click_options
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            normalize_options(kwargs)
+            params = gimme.that(CLIParameters)
+
+            for option in options:
+                if option not in kwargs:
+                    continue
+                result = kwargs.pop(option)
+                setattr(params, option, result)
+            func(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
+
+
+def normalize_options(arguments: dict):
+    if "overwrite" in arguments and "no_overwrite" in arguments:
+        overwrite, no_overwrite = arguments.pop("overwrite"), arguments.pop("no_overwrite")
+        if overwrite and no_overwrite:
+            raise InvalidUsage("cannot combine --overwrite with --no-overwrite")
+        arguments["overwrite"] = maybe_set_flag(False, overwrite, no_overwrite)
+
+    if "yes" in arguments and "no" in arguments:
+        yes, no = arguments.pop("yes"), arguments.pop("no")
+        if yes and no:
+            raise InvalidUsage("cannot combine --yes with --no")
+
+        if "create" in arguments:
+            arguments["create"] = maybe_set_flag(arguments["create"], yes, no)
+
+        if "overwrite" in arguments:
+            arguments["overwrite"] = maybe_set_flag(arguments["overwrite"], yes, no)
+
+    return arguments
+
+
+def handle_event(func=None, *, success_message=None):
+    if func is None:
+        return functools.partial(handle_event, success_message=success_message)
+
+    @functools.wraps(func)
+    def _wrapper(*args, **kwargs):
+        event = func(*args, **kwargs)
+        if not isinstance(event, Event):
+            raise TypeError("A function decorated with 'handle_event' must return an Event")
+
+        mediator = gimme.that(Mediator)
+        result = asyncio.run(mediator.send(event))
+        if success_message is not None:
+            echo(success_message)
+        return result
+
+    return _wrapper

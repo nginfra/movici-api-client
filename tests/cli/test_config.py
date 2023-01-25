@@ -51,12 +51,13 @@ def test_alternative_config_path_default():
 
 def test_set_config_env(tmp_path):
     os.environ["MOVICI_CLI_CONFIG"] = str(tmp_path / ".movici.conf")
-    assert get_config_path().is_relative_to(tmp_path)
+    assert str(get_config_path()).startswith(str(tmp_path))
 
 
 def test_alternative_config_env(tmp_path):
     os.environ["MOVICI_CLI_CONFIG_ALT"] = str(tmp_path / ".movici.conf")
-    assert get_config_path(env="MOVICI_CLI_CONFIG_ALT").is_relative_to(tmp_path)
+
+    assert str(get_config_path(env="MOVICI_CLI_CONFIG_ALT")).startswith(str(tmp_path))
 
 
 def test_get_config(config_file):

@@ -3,6 +3,7 @@ import pathlib
 import typing as t
 import uuid
 
+import gimme
 import questionary
 from click import Abort, Choice
 from click import Path as PathType
@@ -48,7 +49,7 @@ def assert_context(config: Config):
 
 
 def assert_current_context():
-    config = dependencies.get(Config)
+    config = gimme.get(Config)
     return assert_context(config)
 
 
@@ -113,11 +114,11 @@ def handle_movici_error(e: MoviciCLIError):
 
 
 def iter_commands(obj: Controller):
-    for key in dir(obj):
+    for key in obj.__commands__:
         val = getattr(obj, key)
-        if opts := get_options(val, OPTIONS_COMMAND):
-            group_name = opts.get("group_name") or key
-            yield (group_name, val)
+        opts = get_options(val, OPTIONS_COMMAND)
+        group_name = opts.get("group_name") or key
+        yield (group_name, val)
 
 
 def prompt_choices(question: str, choices: t.Sequence[str]):

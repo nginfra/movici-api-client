@@ -6,7 +6,8 @@ import os
 import pathlib
 import typing as t
 
-from movici_api_client.cli import dependencies
+import gimme
+
 from movici_api_client.cli.helpers import read_json_file
 
 from .exceptions import DuplicateContext, InvalidConfigFile, InvalidFile
@@ -49,7 +50,7 @@ def read_config(file: pathlib.Path) -> Config:
 
 
 def write_config(config: Config = None, file: t.Optional[pathlib.Path] = None):
-    config = config or dependencies.get(Config)
+    config = config or gimme.that(Config)
     file = pathlib.Path(file) if file is not None else get_config_path()
     file.write_text(json.dumps(config.as_dict(), indent=2))
 
@@ -144,27 +145,22 @@ class Context(dict):
     __special_keys__ = {
         "auth": SpecialKey(parse=parse_bool, default=True),
         "name": SpecialKey(required=True),
-        "base_url": SpecialKey(required=True),
+        "url": SpecialKey(required=True),
     }
 
     def __init__(self, name: str, url: str, **kwargs) -> None:
         super().__init__(name=name, url=url, **kwargs)
 
-    @property
-    def name(self):
-        return self["name"]
+    def __getattribute__(self, name):
+        if name in type(self).__special_keys__:
+            return self[name]
+        return super().__getattribute__(name)
 
-    @name.setter
-    def name(self, val):
-        self["name"] = val
-
-    @property
-    def url(self):
-        return self["url"]
-
-    @url.setter
-    def url(self, val):
-        self["url"] = val
+    def __setattr__(self, name: str, value):
+        if name in self.__special_keys__:
+            self[name] = value
+        else:
+            super().__setattr__(name, value)
 
     def __getitem__(self, key):
         if (special := self.__special_keys__.get(key)) and special.default:

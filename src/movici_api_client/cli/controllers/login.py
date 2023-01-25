@@ -5,7 +5,7 @@ from ..config import Context
 from ..utils import echo, prompt
 
 # While this is in the controllers package, it is not a subclass of Controller.
-# it must be instantiate inside a command
+# it must be instantiated from inside a command
 
 
 class LoginController:
