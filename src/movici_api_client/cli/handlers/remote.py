@@ -1,8 +1,21 @@
 import asyncio
+import json
 import typing as t
 
 from movici_api_client.api import requests as req
 from movici_api_client.api.client import AsyncClient
+from movici_api_client.cli.events.view import (
+    DeleteView,
+    DownloadMultipleViews,
+    DownloadView,
+    DuplicateView,
+    EditView,
+    GetAllViews,
+    GetSingleView,
+    UploadMultipleViews,
+    UploadView,
+)
+from movici_api_client.cli.filetransfer.download import prepare_overwrite_file
 
 from .. import filetransfer as ft
 from ..common import CLIParameters
@@ -47,7 +60,7 @@ from ..events.scenario import (
 from ..exceptions import InvalidActiveProject, InvalidResource, NoActiveProject, NoChangeDetected
 from ..filetransfer.common import resolve_question_flag
 from ..handlers.common import gather_safe
-from ..handlers.query import DatasetQuery, ProjectQuery, ScenarioQuery, ScopeQuery
+from ..handlers.query import DatasetQuery, ProjectQuery, ScenarioQuery, ScopeQuery, ViewQuery
 from ..helpers import edit_resource
 from ..utils import assert_current_context, confirm, echo, prompt_choices_async
 
@@ -504,6 +517,136 @@ class RemoteEditScenarioHandler(RemoteEventHandler):
         uuid = current["uuid"]
         result = edit_resource(current)
         await self.client.request(req.UpdateScenario(uuid, payload=result))
+
+
+@requires_valid_project_uuid
+class RemoteGetAllViewsHandler(RemoteEventHandler):
+    __event__ = GetAllViews
+    project_uuid: str
+
+    async def handle(self, event: GetAllViews, mediator: Mediator):
+        uuid = await ScenarioQuery(self.project_uuid).get_uuid(event.scenario_name_or_uuid)
+        return await self.client.request(req.GetViews(uuid))
+
+
+@requires_valid_project_uuid
+class RemoteGetSingleViewHandler(RemoteEventHandler):
+    __event__ = GetSingleView
+    project_uuid: str
+
+    async def handle(self, event: GetSingleView, mediator: Mediator):
+        return await ViewQuery(self.project_uuid, event.scenario_name_or_uuid).by_name_or_uuid(
+            event.view_name_or_uuid
+        )
+
+
+@requires_valid_project_uuid
+class RemoteDeleteViewHandler(RemoteEventHandler):
+    __event__ = DeleteView
+    project_uuid: str
+
+    async def handle(self, event: DeleteView, mediator: Mediator):
+        async with self.client:
+            uuid = await ViewQuery(self.project_uuid, event.scenario_name_or_uuid).get_uuid(
+                event.view_name_or_uuid
+            )
+
+            confirm(f"Are you sure you wish to delete view '{event.view_name_or_uuid}'")
+            return await self.client.request(req.DeleteView(uuid))
+
+
+@requires_valid_project_uuid
+class RemoteUploadViewHandler(RemoteEventHandler):
+    __event__ = UploadView
+    project_uuid: str
+
+    async def handle(self, event: UploadView, mediator: Mediator):
+        scenario_uuid = await ScenarioQuery(self.project_uuid).get_uuid(
+            event.scenario_name_or_uuid
+        )
+        await ft.UploadResource(
+            event.file,
+            parent_uuid=scenario_uuid,
+            strategy=ft.ViewUploadStrategy(client=self.client),
+            name_or_uuid=event.view_name_or_uuid,
+        )
+
+
+@requires_valid_project_uuid
+class RemoteUploadMultipleViewsHandler(RemoteEventHandler):
+    __event__ = UploadMultipleViews
+    project_uuid: str
+
+    async def handle(self, event: UploadMultipleViews, mediator: Mediator):
+        scenario = await ScenarioQuery(self.project_uuid).by_name_or_uuid(
+            event.scenario_name_or_uuid
+        )
+
+        return await ft.UploadMultipleResources(
+            event.directory,
+            parent_uuid=scenario["uuid"],
+            strategy=ft.ViewUploadStrategy(client=self.client, scenario=scenario["name"]),
+        )
+
+
+@requires_valid_project_uuid
+class RemoteDownloadViewHandler(RemoteEventHandler):
+    __event__ = DownloadView
+    project_uuid: str
+
+    async def handle(self, event: DownloadView, mediator: Mediator):
+        scenario = await ScenarioQuery(self.project_uuid).by_name_or_uuid(
+            event.scenario_name_or_uuid
+        )
+        view = await ViewQuery(self.project_uuid, event.scenario_name_or_uuid).by_name_or_uuid(
+            event.view_name_or_uuid
+        )
+
+        views_dir = event.directory.ensure_views_dir(scenario["name"])
+        file = views_dir.joinpath(view["name"]).with_suffix(".json")
+
+        if not prepare_overwrite_file(file, overwrite=self.params.overwrite):
+            return
+        file.write_text(json.dumps(view, indent=2))
+
+
+@requires_valid_project_uuid
+class RemoteDownloadMultipleViewsHandler(RemoteEventHandler):
+    __event__ = DownloadMultipleViews
+    project_uuid: str
+
+    async def handle(self, event: DownloadMultipleViews, mediator: Mediator):
+        scenario = await ScenarioQuery(self.project_uuid).by_name_or_uuid(
+            event.scenario_name_or_uuid
+        )
+        await ft.DownloadViews(scenario, directory=event.directory)
+
+
+@requires_valid_project_uuid
+class RemoteEditViewHandler(RemoteEventHandler):
+    __event__ = EditView
+    project_uuid: str
+
+    async def handle(self, event: EditView, mediator: Mediator):
+        current = await ViewQuery(self.project_uuid, event.scenario_name_or_uuid).by_name_or_uuid(
+            event.view_name_or_uuid
+        )
+        uuid = current["uuid"]
+        result = edit_resource(current)
+        await self.client.request(req.UpdateView(uuid, payload=result))
+
+
+@requires_valid_project_uuid
+class RemoteDuplicateViewHandler(RemoteEventHandler):
+    __event__ = DuplicateView
+    project_uuid: str
+
+    async def handle(self, event: DuplicateView, mediator: Mediator):
+        view = await mediator.send(
+            GetSingleView(event.scenario_name_or_uuid, event.view_name_or_uuid)
+        )
+        view["name"] = event.new_view_name
+        await self.client.request(req.CreateView(view["scenario_uuid"], payload=view))
 
 
 class RemoteGetScopesHandler(RemoteEventHandler):

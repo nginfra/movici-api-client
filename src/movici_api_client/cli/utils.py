@@ -18,7 +18,6 @@ from movici_api_client.cli.config import Config
 from movici_api_client.cli.exceptions import (
     InvalidResource,
     MoviciCLIError,
-    NoActiveProject,
     NoConfig,
     NoCurrentContext,
 )
@@ -53,15 +52,6 @@ def assert_current_context():
     return assert_context(config)
 
 
-def assert_active_project(project=None):
-    if project is None:
-        context = assert_current_context()
-        try:
-            return assert_project_uuid(context["project"])
-        except KeyError:
-            raise NoActiveProject()
-
-
 def assert_resource_uuid(resource: str, request: Request, resource_type="resource"):
     resources = get_resource_uuids(request)
     try:
@@ -70,42 +60,14 @@ def assert_resource_uuid(resource: str, request: Request, resource_type="resourc
         raise InvalidResource(resource_type, resource)
 
 
-def assert_project_uuid(project: str):
-    return assert_resource_uuid(project, GetProjects(), resource_type="project")
-
-
 def get_resource_uuids(request: Request):
     client = dependencies.get(Client)
     all_resources = client.request(request)
     return {p["name"]: p["uuid"] for p in all_resources}
 
 
-def get_resource_uuid(name_or_uuid, request, resource_type="resource", client=None):
-    client = client or dependencies.get(Client)
-    return (
-        name_or_uuid
-        if validate_uuid(name_or_uuid)
-        else assert_resource_uuid(name_or_uuid, request=request, resource_type=resource_type)
-    )
-
-
-def get_resource(name_or_uuid, request, client=None, resource_type="resource"):
-    client = client or dependencies.get(Client)
-    all_resources = client.request(request)
-    return get_resource_from_list(name_or_uuid, all_resources, resource_type=resource_type)
-
-
 def get_project_uuids():
     return get_resource_uuids(GetProjects())
-
-
-def get_resource_from_list(name_or_uuid, all_resources, resource_type="resource"):
-    match_field = "uuid" if validate_uuid(name_or_uuid) else "name"
-    for res in all_resources:
-        if name_or_uuid == res[match_field]:
-            return res
-    else:
-        raise InvalidResource(resource_type, name_or_uuid)
 
 
 def handle_movici_error(e: MoviciCLIError):

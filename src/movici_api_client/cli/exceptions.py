@@ -1,6 +1,8 @@
 import dataclasses
 import pathlib
 
+from click import ClickException  # noqa
+
 
 @dataclasses.dataclass
 class MoviciCLIError(Exception):

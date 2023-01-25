@@ -19,15 +19,20 @@ class ConfigController(Controller):
     @argument("name", required=False)
     def create(self, name):
         config = self.config
-
         if config.get_context(name):
             raise DuplicateContext(name)
 
         echo("Creating a new context, please give the following information")
+
         name = name or prompt("Name")
+        if config.get_context(name):
+            raise DuplicateContext(name)
+
         is_local = confirm("Is this a local context?", abort=False)
         location = get_local_location() if is_local else get_remote_location()
-        context = Context(name, location)
+        context = Context(name, location, local=is_local)
+        if is_local:
+            context["auth"] = False
         config.add_context(context)
 
         activate = confirm("Do you wish to activate this context?", default=True)

@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import json
 import typing as t
 
 import gimme
@@ -10,28 +11,14 @@ from movici_api_client.cli.controllers.common import resolve_data_directory
 from movici_api_client.cli.cqrs import Event, Mediator
 
 from . import dependencies
-from .common import (
-    OPTIONS_COMMAND,
-    CLIParameters,
-    Controller,
-    get_options,
-    has_options,
-    set_options,
-)
-from .exceptions import (
-    InvalidActiveProject,
-    InvalidUsage,
-    MoviciCLIError,
-    NoActiveProject,
-    Unauthenticated,
-)
+from .common import OPTIONS_COMMAND, CLIParameters, get_options, has_options, set_options
+from .exceptions import InvalidUsage, MoviciCLIError, Unauthenticated
 from .ui import format_anything, format_table
 from .utils import (
     Choice,
     DirPath,
     assert_current_context,
     echo,
-    get_project_uuids,
     handle_movici_error,
     maybe_set_flag,
 )
@@ -105,10 +92,14 @@ def format_output(func=None, /, fields=None, header=None):
 
     @functools.wraps(func)
     def decorated(*args, **kwargs):
+        params = gimme.that(CLIParameters)
         result = func(*args, **kwargs)
-        result = format_anything(result, fields)
-        if header is not None:
-            result = header + "\n" + result
+        if params.output == "json":
+            result = json.dumps(result, indent=2)
+        else:
+            result = format_anything(result, fields)
+            if header is not None:
+                result = header + "\n" + result
         echo(result)
 
     return decorated
@@ -122,28 +113,6 @@ def tabulate_results(func=None, /, keys=()):
     def decorated(*args, **kwargs):
         result = func(*args, **kwargs)
         echo(format_table(result, keys))
-
-    return decorated
-
-
-def valid_project_uuid(func):
-    @functools.wraps(func)
-    def decorated(*args, **kwargs):
-        context = assert_current_context()
-        project = context.get("project")
-        if not project:
-            raise NoActiveProject()
-
-        projects_dict = get_project_uuids()
-
-        try:
-            project_uuid = projects_dict[project]
-        except KeyError:
-            raise InvalidActiveProject(project)
-        if len(args) and isinstance(args[0], Controller):
-            self, *args = args
-            return func(self, project_uuid, *args, **kwargs)
-        return func(project_uuid, *args, **kwargs)
 
     return decorated
 
