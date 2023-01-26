@@ -47,7 +47,7 @@ def authenticated(func):
         client = dependencies.get(Client)
 
         context = assert_current_context()
-        if context.get("auth"):
+        if context.auth:
             client.request(CheckAuthToken(), on_error=on_error)
         return func(*args, **kwargs)
 

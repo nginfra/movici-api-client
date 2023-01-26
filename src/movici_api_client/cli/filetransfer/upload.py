@@ -221,7 +221,7 @@ class UploadTimeline(Task):
             await ParallelTaskGroup(
                 (
                     UploadUpdate(self.parent_uuid, file)
-                    for file in self.directory.iter_updates(scenario["name"])
+                    for file in self.directory.updates(scenario["name"]).iter_files()
                 ),
                 progress=True,
                 description=self.scenario["name"],
@@ -329,7 +329,7 @@ class DatasetUploadStrategy(UploadStrategy):
         self.all_dataset_types = all_dataset_types
 
     def iter_files(self, directory: DataDir):
-        yield from directory.iter_datasets()
+        yield from directory.datasets().iter_files()
 
     async def get_all(self, parent_uuid: str):
         return await self.client.request(GetDatasets(project_uuid=parent_uuid))
@@ -402,7 +402,7 @@ class ScenarioUploadStrategy(UploadStrategy):
         return await self.client.request(GetScenarios(project_uuid=parent_uuid))
 
     def iter_files(self, directory: DataDir):
-        yield from directory.iter_scenarios()
+        yield from directory.scenarios().iter_files()
 
     async def create_new(self, parent_uuid: str, file: pathlib.Path, name=None, inspect=False):
         payload = self._prepare_payload(name or file.stem, file, inspect)
@@ -436,7 +436,7 @@ class ViewUploadStrategy(UploadStrategy):
             raise ValueError(
                 f"{type(self).__name__}.scenario is required to iterate over view-files"
             )
-        yield from directory.iter_views(self.scenario)
+        yield from directory.views(self.scenario).iter_files()
 
     async def create_new(self, parent_uuid: str, file: pathlib.Path, name=None, inspect=False):
         payload = self._prepare_payload(name or file.stem, file, inspect)

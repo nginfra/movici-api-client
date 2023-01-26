@@ -1,7 +1,26 @@
 import itertools
+import json
+import pathlib
 import typing as t
 
-from movici_api_client.cli.events.project import (
+from movici_api_client.cli.events.dataset import (
+    ClearDataset,
+    CreateDataset,
+    DeleteDataset,
+    DownloadDataset,
+    DownloadMultipleDatasets,
+    EditDataset,
+    GetAllDatasets,
+    GetSingleDataset,
+    UpdateDataset,
+    UploadDataset,
+    UploadMultipleDatasets,
+)
+
+from ..common import CLIParameters
+from ..cqrs import Event, EventHandler, Mediator
+from ..data_dir import MoviciDataDir
+from ..events.project import (
     CreateProject,
     DeleteProject,
     DownloadProject,
@@ -10,12 +29,17 @@ from movici_api_client.cli.events.project import (
     GetSingleProject,
     UploadProject,
 )
-from movici_api_client.cli.exceptions import InvalidUsage
+from ..exceptions import CustomError, InvalidUsage
+from ..utils import confirm  # noqa TODO: remove noqa once confirm is used
 
-from ..cqrs import Event, EventHandler, Mediator
+
+class LocalEventHandler(EventHandler):
+    def __init__(self, params: CLIParameters, directory: MoviciDataDir) -> None:
+        self.params = params
+        self.directory = directory
 
 
-class LocalProjectsHandler(EventHandler):
+class UnsupportedEventsHandler(LocalEventHandler):
     __event__ = (
         GetAllProjects,
         GetSingleProject,
@@ -25,13 +49,100 @@ class LocalProjectsHandler(EventHandler):
         UploadProject,
         DownloadProject,
         EditProject,
+        UpdateDataset,
+        DeleteDataset,
+        ClearDataset,
+        UploadDataset,
+        UploadMultipleDatasets,
+        DownloadDataset,
+        DownloadMultipleDatasets,
+        EditDataset,
     )
 
     async def handle(self, event: Event, mediator: Mediator):
         raise InvalidUsage("Local contexts do no support projects")
 
 
+class LocalDatasetsHandler(LocalEventHandler):
+    desired_keys = {"uuid", "display_name", "type", "format"}
+
+    async def handle(self, event: Event, mediator: Mediator):
+        raise InvalidUsage("This command is not supported for local contexts")
+
+    def get_dataset_meta(self, file: pathlib.Path):
+        ds = {"name": file.stem}
+        if self.params.inspect and file.suffix == ".json":
+            ds.update(self.inspect_json_file(file))
+        if "format" not in ds:
+            ds_type, ds_format = self.get_type_and_format(file, ds.get("type"))
+            if ds_type is not None:
+                ds["type"] = ds_type
+            if ds_format is not None:
+                ds["format"] = ds_format
+        if ds.get("format") == "binary":
+            ds["has_data"] = True
+        return ds
+
+    def inspect_json_file(self, file: pathlib.Path):
+        full_dataset = json.loads(file.read_bytes())
+        result = {}
+        for key in full_dataset.keys() & self.desired_keys:
+            result[key] = full_dataset[key]
+        result["has_data"] = "data" in full_dataset
+        return result
+
+    @staticmethod
+    def get_type_and_format(file: pathlib.Path, dataset_type):
+        if dataset_type is None:
+            if file.suffix == ".nc":
+                dataset_type = "flooding_tape"
+            elif file.suffix in (".tif", ".tiff", ".geotiff", ".geotif"):
+                dataset_type = "height_map"
+        formats = {
+            "tabular": "unstructured",
+            "height_map": "binary",
+            "flooding_tape": "binary",
+            None: None,
+        }
+        return dataset_type, formats.get(dataset_type, "entity_based")
+
+
+class LocalGetAllDatasetsHandler(LocalDatasetsHandler):
+    __event__ = GetAllDatasets
+
+    async def handle(self, event: Event, mediator: Mediator):
+        return [self.get_dataset_meta(file) for file in self.directory.datasets().iter_files()]
+
+
+class LocalGetSingleHandler(LocalDatasetsHandler):
+    __event__ = GetSingleDataset
+
+    async def handle(self, event: GetSingleDataset, mediator: Mediator):
+        file = self.directory.datasets().get_file_path(event.name_or_uuid)
+        if file is None:
+            raise CustomError(f"Dataset {event.name_or_uuid} not found")
+        return self.get_dataset_meta(file)
+
+
+class LocalCreateDatasetHandler(LocalDatasetsHandler):
+    __event__ = CreateDataset
+
+    async def handle(self, event: CreateDataset, mediator: Mediator):
+        file = self.directory.datasets().get_file_path_if_exists(event.name)
+        if file is not None:
+            raise CustomError(f"Dataset {event.name} already exists")
+        payload = {"name": event.name, "display_name": event.display_name}
+        if event.type is not None:
+            payload["type"] = event.type
+        file = self.directory.datasets().get_file_path(event.name).with_suffix(".json")
+        file.write_text(json.dumps(payload))
+
+        return "Dataset succesfully created"
+
+
 def parse_handler(handler: t.Type[EventHandler]):
+    if handler.__event__ is None:
+        return
     if isinstance(handler.__event__, (tuple, list)):
         yield from ((e, handler) for e in handler.__event__)
     else:

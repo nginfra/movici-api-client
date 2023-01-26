@@ -1,3 +1,4 @@
+import json
 import uuid
 from unittest.mock import AsyncMock, call, patch
 
@@ -47,12 +48,24 @@ from movici_api_client.cli.events.scenario import (
     UploadMultipleScenarios,
     UploadScenario,
 )
+from movici_api_client.cli.events.view import (
+    DeleteView,
+    DownloadMultipleViews,
+    DownloadView,
+    DuplicateView,
+    EditView,
+    GetAllViews,
+    GetSingleView,
+    UploadMultipleViews,
+    UploadView,
+)
 from movici_api_client.cli.exceptions import NoChangeDetected
 from movici_api_client.cli.handlers.remote import (
     ALL_HANDLERS,
     RemoteCreateProjectHandler,
     RemoteDeleteProjectHandler,
     RemoteDownloadProjectHandler,
+    RemoteDuplicateViewHandler,
     RemoteGetAllProjectsHandler,
     RemoteGetSingleProjectHandler,
     RemoteRunSimulationHandler,
@@ -63,7 +76,8 @@ from movici_api_client.cli.handlers.remote import (
 from movici_api_client.cli.testing import FakeAsyncClient
 
 uuid1 = str(uuid.UUID(int=1))
-project_uuid = str(uuid.UUID(int=2))
+uuid2 = str(uuid.UUID(int=2))
+project_uuid = str(uuid.UUID(int=3))
 
 
 @pytest.fixture
@@ -276,6 +290,7 @@ def simple_events():
     yield GetSingleScenario(uuid1), req.GetSingleScenario(uuid1)
     payload = {"some": "payload"}
     yield CreateScenario(payload=payload), req.CreateScenario(project_uuid, payload)
+    yield GetAllViews(uuid1), req.GetViews(uuid1)
     yield GetScopes(), req.GetScopes()
     yield CreateScope("some_scope"), req.CreateScope("some_scope")
     yield DeleteScope(uuid1, confirm=False), req.DeleteScope(uuid1)
@@ -284,6 +299,7 @@ def simple_events():
 def simple_confirmed_events():
     yield DeleteDataset(uuid1), req.DeleteDataset(uuid1)
     yield DeleteScenario(uuid1), req.DeleteScenario(uuid1)
+    yield DeleteView(scenario_name_or_uuid=uuid1, view_name_or_uuid=uuid2), req.DeleteView(uuid2)
     yield DeleteScope(uuid1, confirm=True), req.DeleteScope(uuid1)
 
 
@@ -304,7 +320,10 @@ async def test_remote_simple_confirmed_events(event, expected, mediator, client,
 
 @pytest.mark.parametrize(
     "event_cls, request_cls",
-    [(EditDataset, req.UpdateDataset), (EditScenario, req.UpdateScenario)],
+    [
+        (EditDataset, req.UpdateDataset),
+        (EditScenario, req.UpdateScenario),
+    ],
 )
 @pytest.mark.asyncio
 async def test_remote_edit_resource_handlers(event_cls, request_cls, mediator, client):
@@ -360,7 +379,7 @@ async def test_remote_download_dataset_handler(client, mediator, data_dir):
         await mediator.send(DownloadDataset("some_dataset", directory=data_dir))
 
     assert mock.await_args == call(
-        file=data_dir.datasets.joinpath(dataset["name"]),
+        file=data_dir.datasets().path.joinpath(dataset["name"]),
         request=req.GetDatasetData(dataset["uuid"]),
     )
 
@@ -456,4 +475,111 @@ async def test_remote_download_multiple_scenarios_handler(mediator, data_dir, va
 
     assert mock.await_args == call(
         {"uuid": valid_project_uuid}, directory=data_dir, progress=False
+    )
+
+
+@pytest.mark.asyncio
+async def test_remote_get_single_view(mediator, client):
+    view = {"uuid": uuid1, "name": "some_view"}
+    client.add_response([view])
+
+    result = await mediator.send(GetSingleView(uuid2, uuid1))
+    assert result == view
+
+
+@patch.object(
+    filetransfer.UploadStrategy, "__eq__", lambda self, other: isinstance(other, type(self))
+)
+@pytest.mark.asyncio
+async def test_remote_upload_view_handler(mediator, client):
+    scenario = {"uuid": uuid1, "name": "some_scenario"}
+    client.add_response([scenario])
+    with patch.object(filetransfer, "UploadResource", new_callable=AsyncMock) as mock:
+        await mediator.send(
+            UploadView(
+                scenario_name_or_uuid="some_scenario",
+                view_name_or_uuid="some_view",
+                file="some_file.json",
+            )
+        )
+    assert mock.await_args == call(
+        "some_file.json",
+        parent_uuid=scenario["uuid"],
+        strategy=filetransfer.ViewUploadStrategy(None),
+        name_or_uuid="some_view",
+    )
+
+
+@patch.object(
+    filetransfer.UploadStrategy, "__eq__", lambda self, other: isinstance(other, type(self))
+)
+@pytest.mark.asyncio
+async def test_remote_upload_multiple_views_handler(mediator, client, data_dir):
+    scenario = {"uuid": uuid1, "name": "some_scenario"}
+    client.add_response([scenario])
+    with patch.object(filetransfer, "UploadMultipleResources", new_callable=AsyncMock) as mock:
+        await mediator.send(
+            UploadMultipleViews(scenario_name_or_uuid="some_scenario", directory=data_dir)
+        )
+    assert mock.await_args == call(
+        data_dir,
+        parent_uuid=scenario["uuid"],
+        strategy=filetransfer.ViewUploadStrategy(None),
+    )
+
+
+@pytest.mark.asyncio
+async def test_remote_download_view_handler(mediator, client, data_dir, cli_params):
+    cli_params.overwrite = True
+    scenario = {"uuid": uuid1, "name": "some_scenario"}
+    view = {"uuid": uuid2, "name": "some_view"}
+    client.add_response([scenario])
+    client.add_response([view])
+
+    await mediator.send(
+        DownloadView(
+            scenario_name_or_uuid="some_scenario",
+            view_name_or_uuid="some_view",
+            directory=data_dir,
+        )
+    )
+    path = data_dir.views("some_scenario").get_file_path("some_view.json")
+    assert json.loads(path.read_text()) == view
+
+
+@pytest.mark.asyncio
+async def test_remote_download_multiple_views_handler(mediator, client, data_dir):
+    scenario = {"uuid": uuid1, "name": "some_scenario"}
+    client.add_response([scenario])
+    with patch.object(filetransfer, "DownloadViews", new_callable=AsyncMock) as mock:
+        await mediator.send(DownloadMultipleViews(scenario_name_or_uuid=uuid1, directory=data_dir))
+    assert mock.await_args == call(scenario, directory=data_dir)
+
+
+@pytest.mark.asyncio
+async def test_remote_edit_view_handler(mediator, client):
+    view = {"name": "some_view", "uuid": uuid2}
+    client.add_response([view])
+    sentinel = object()
+    with patch.object(movici_api_client.cli.handlers.remote, "edit_resource") as edit_resource:
+        edit_resource.return_value = sentinel
+        await mediator.send(EditView(scenario_name_or_uuid=uuid1, view_name_or_uuid=uuid2))
+    assert client.request.await_args == call(req.UpdateView(uuid2, sentinel))
+
+
+@pytest.mark.asyncio
+async def test_remote_duplicate_view_handler(mediator, client):
+
+    handler = RemoteDuplicateViewHandler(client, params=None)
+    mediator = AsyncMock()
+    mediator.send.return_value = {"uuid": uuid2, "scenario_uuid": uuid1, "name": "some_view"}
+    await handler.handle(
+        DuplicateView(
+            scenario_name_or_uuid=uuid1, view_name_or_uuid=uuid2, new_view_name="new_view"
+        ),
+        mediator=mediator,
+    )
+    assert mediator.send.await_args == call(GetSingleView(uuid1, uuid2))
+    assert client.request.await_args == call(
+        req.CreateView(uuid1, payload={"scenario_uuid": uuid1, "name": "new_view"})
     )

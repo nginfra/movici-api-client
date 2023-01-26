@@ -32,6 +32,7 @@ def setup_dependencies():
     gimme.register(Client, setup_client)
     gimme.register(AsyncClient, AsyncClient.from_sync_client)
     gimme.register(Mediator, setup_mediator)
+    gimme.register(MoviciDataDir, setup_local_dir)
 
 
 def setup_client(config: Config):
@@ -48,6 +49,14 @@ def setup_client(config: Config):
         service_urls=parse_service_urls(context, prefix="service."),
         client=httpx.Client(timeout=httpx.Timeout(10.0, read=60.0)),
     )
+
+
+def setup_local_dir(config: Config):
+    context = config.current_context
+    if context is None or not context.get("local"):
+        return None
+
+    return MoviciDataDir.resolve_from_subpath(pathlib.Path(context.location))
 
 
 def setup_mediator(config: Config):

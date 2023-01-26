@@ -315,7 +315,7 @@ class RemoteDownloadDatasetHandler(RemoteEventHandler):
 
     async def handle(self, event: DownloadDataset, mediator: Mediator):
         dataset = await DatasetQuery(self.project_uuid).by_name_or_uuid(event.name_or_uuid)
-        file = event.directory.datasets.joinpath(dataset["name"])
+        file = event.directory.datasets().get_file_path(dataset["name"])
         return await ft.DownloadResource(
             file=file,
             request=req.GetDatasetData(dataset["uuid"]),
@@ -598,12 +598,12 @@ class RemoteDownloadViewHandler(RemoteEventHandler):
         scenario = await ScenarioQuery(self.project_uuid).by_name_or_uuid(
             event.scenario_name_or_uuid
         )
-        view = await ViewQuery(self.project_uuid, event.scenario_name_or_uuid).by_name_or_uuid(
+        view = await ViewQuery(self.project_uuid, scenario["uuid"]).by_name_or_uuid(
             event.view_name_or_uuid
         )
-
-        views_dir = event.directory.ensure_views_dir(scenario["name"])
-        file = views_dir.joinpath(view["name"]).with_suffix(".json")
+        views_dir = event.directory.views(scenario["name"])
+        views_dir.ensure_directory()
+        file = views_dir.get_file_path(view["name"]).with_suffix(".json")
 
         if not prepare_overwrite_file(file, overwrite=self.params.overwrite):
             return
@@ -646,6 +646,7 @@ class RemoteDuplicateViewHandler(RemoteEventHandler):
             GetSingleView(event.scenario_name_or_uuid, event.view_name_or_uuid)
         )
         view["name"] = event.new_view_name
+        del view["uuid"]
         await self.client.request(req.CreateView(view["scenario_uuid"], payload=view))
 
 
