@@ -10,7 +10,12 @@ import movici_api_client.cli.handlers.local
 from movici_api_client.cli.common import CLIParameters
 from movici_api_client.cli.cqrs import Mediator
 from movici_api_client.cli.data_dir import MoviciDataDir
-from movici_api_client.cli.events.dataset import CreateDataset, GetAllDatasets, GetSingleDataset
+from movici_api_client.cli.events.dataset import (
+    CreateDataset,
+    GetAllDatasets,
+    GetSingleDataset,
+    UpdateDataset,
+)
 from movici_api_client.cli.events.project import (
     CreateProject,
     DeleteProject,
@@ -20,7 +25,7 @@ from movici_api_client.cli.events.project import (
     GetSingleProject,
     UploadProject,
 )
-from movici_api_client.cli.exceptions import InvalidUsage
+from movici_api_client.cli.exceptions import Conflict, InvalidUsage, NotFound
 from movici_api_client.cli.handlers import LOCAL_HANDLERS
 from movici_api_client.cli.handlers.local import LocalDatasetsHandler
 
@@ -184,4 +189,67 @@ async def test_local_create_dataset_handler(data_dir, mediator):
         CreateDataset(name="my_dataset", display_name="My Dataset", type="my_type")
     )
     assert result == "Dataset succesfully created"
-    assert data_dir.datasets().path.joinpath()
+    assert data_dir.datasets().get_file_path("my_dataset.json")
+
+
+class TestLocalUpdateDatasetHandler:
+    @pytest.fixture
+    def json_dataset(self, data_dir):
+        data = {
+            "name": "my_dataset",
+            "display_name": "Display Name",
+            "type": "some_type",
+            "data": {"some": "data"},
+        }
+        file = data_dir.datasets().get_file_path(data["name"] + ".json")
+        file.write_text(json.dumps(data))
+        return data
+
+    @pytest.fixture
+    def binary_dataset(self, data_dir):
+        name = "some_binary_dataset"
+        data_dir.datasets().get_file_path(name + ".nc").write_bytes(b"123")
+        return name
+
+    @pytest.mark.asyncio
+    async def test_update_json_dataset(self, json_dataset, data_dir: MoviciDataDir, mediator):
+        new_file = data_dir.datasets().get_file_path("new_name.json")
+        result = await mediator.send(
+            UpdateDataset(
+                name_or_uuid="my_dataset",
+                name="new_name",
+                display_name="New Display Name",
+                type="new_type",
+            )
+        )
+        assert result == "Dataset succesfully updated"
+        assert not data_dir.datasets().get_file_path(json_dataset["name"] + ".json").exists()
+        assert json.loads(new_file.read_text()) == {
+            "name": "new_name",
+            "display_name": "New Display Name",
+            "type": "new_type",
+            "data": {"some": "data"},
+        }
+
+    @pytest.mark.asyncio
+    async def test_update_binary_dataset(self, binary_dataset, data_dir: MoviciDataDir, mediator):
+        new_file = data_dir.datasets().get_file_path("new_name.nc")
+        result = await mediator.send(
+            UpdateDataset(
+                name_or_uuid=binary_dataset,
+                name="new_name",
+            )
+        )
+        assert result == "Dataset succesfully updated"
+        assert not data_dir.datasets().get_file_path(binary_dataset + ".json").exists()
+        assert new_file.read_bytes() == b"123"
+
+    @pytest.mark.asyncio
+    async def test_not_exists(self, mediator):
+        with pytest.raises(NotFound):
+            await mediator.send(UpdateDataset("invalid", name="new_name"))
+
+    @pytest.mark.asyncio
+    async def test_duplicate_target(self, mediator, binary_dataset, json_dataset):
+        with pytest.raises(Conflict):
+            await mediator.send(UpdateDataset(json_dataset["name"], name=binary_dataset))

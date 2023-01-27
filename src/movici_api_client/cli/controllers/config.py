@@ -3,7 +3,7 @@ import pathlib
 import gimme
 
 from movici_api_client.cli.config import Config, Context, write_config
-from movici_api_client.cli.exceptions import DuplicateContext, NoContextAvailable, NoSuchContext
+from movici_api_client.cli.exceptions import Conflict, NoContextAvailable, NotFound
 
 from ..common import Controller
 from ..decorators import argument, command, format_output, option
@@ -16,17 +16,13 @@ class ConfigController(Controller):
     config: Config = gimme.attribute(Config)
 
     @command
-    @argument("name", required=False)
+    @argument("name")
     def create(self, name):
         config = self.config
         if config.get_context(name):
-            raise DuplicateContext(name)
+            raise Conflict("Context", name)
 
         echo("Creating a new context, please give the following information")
-
-        name = name or prompt("Name")
-        if config.get_context(name):
-            raise DuplicateContext(name)
 
         is_local = confirm("Is this a local context?", abort=False)
         location = get_local_location() if is_local else get_remote_location()
@@ -50,9 +46,15 @@ class ConfigController(Controller):
         try:
             config.activate_context(context)
         except ValueError:
-            raise NoSuchContext(context=context)
+            raise NotFound("Context", context)
 
         write_config(config)
+
+    @command
+    @argument("context")
+    def delete(self, context: str):
+        self.config.delete_context(context)
+        echo("Context succesfully deleted")
 
     @command
     @option("-a", "--all", is_flag=True)

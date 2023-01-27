@@ -29,7 +29,7 @@ from ..events.project import (
     GetSingleProject,
     UploadProject,
 )
-from ..exceptions import CustomError, InvalidUsage
+from ..exceptions import Conflict, InvalidUsage, NoChangeDetected, NotFound
 from ..utils import confirm  # noqa TODO: remove noqa once confirm is used
 
 
@@ -49,8 +49,6 @@ class UnsupportedEventsHandler(LocalEventHandler):
         UploadProject,
         DownloadProject,
         EditProject,
-        UpdateDataset,
-        DeleteDataset,
         ClearDataset,
         UploadDataset,
         UploadMultipleDatasets,
@@ -106,6 +104,18 @@ class LocalDatasetsHandler(LocalEventHandler):
         }
         return dataset_type, formats.get(dataset_type, "entity_based")
 
+    def get_file_raise_on_not_found(self, name):
+        file = self.directory.datasets().get_file_path_if_exists(name)
+        if file is None:
+            raise NotFound("Dataset", name)
+        return file
+
+    def get_file_raise_on_conflict(self, name, suffix):
+        file = self.directory.datasets().get_file_path_if_exists(name)
+        if file is not None:
+            raise Conflict("Dataset", name)
+        return self.directory.datasets().get_file_path(name + suffix)
+
 
 class LocalGetAllDatasetsHandler(LocalDatasetsHandler):
     __event__ = GetAllDatasets
@@ -118,9 +128,7 @@ class LocalGetSingleHandler(LocalDatasetsHandler):
     __event__ = GetSingleDataset
 
     async def handle(self, event: GetSingleDataset, mediator: Mediator):
-        file = self.directory.datasets().get_file_path(event.name_or_uuid)
-        if file is None:
-            raise CustomError(f"Dataset {event.name_or_uuid} not found")
+        file = self.get_file_raise_on_not_found(event.name_or_uuid)
         return self.get_dataset_meta(file)
 
 
@@ -128,16 +136,42 @@ class LocalCreateDatasetHandler(LocalDatasetsHandler):
     __event__ = CreateDataset
 
     async def handle(self, event: CreateDataset, mediator: Mediator):
-        file = self.directory.datasets().get_file_path_if_exists(event.name)
-        if file is not None:
-            raise CustomError(f"Dataset {event.name} already exists")
+        file = self.get_file_raise_on_conflict(event.name, ".json")
+
         payload = {"name": event.name, "display_name": event.display_name}
         if event.type is not None:
             payload["type"] = event.type
-        file = self.directory.datasets().get_file_path(event.name).with_suffix(".json")
+
         file.write_text(json.dumps(payload))
 
         return "Dataset succesfully created"
+
+
+class LocalUpdateDatasetHandler(LocalDatasetsHandler):
+    __event__ = UpdateDataset
+
+    async def handle(self, event: UpdateDataset, mediator: Mediator):
+        file = self.get_file_raise_on_not_found(event.name_or_uuid)
+        payload = event.payload()
+        if not payload:
+            raise NoChangeDetected()
+        if event.name and event.name != event.name_or_uuid:
+            new_file = self.get_file_raise_on_conflict(event.name, file.suffix)
+            file.rename(new_file)
+            file = new_file
+
+        if file.suffix == ".json":
+            contents = json.loads(file.read_bytes())
+            contents.update(payload)
+            file.write_text(json.dumps(contents))
+        return "Dataset succesfully updated"
+
+
+class LocalDeleteDatasetHandler(LocalDatasetsHandler):
+    __event__ = DeleteDataset
+
+    async def handle(self, event: Event, mediator: Mediator):
+        return await super().handle(event, mediator)
 
 
 def parse_handler(handler: t.Type[EventHandler]):

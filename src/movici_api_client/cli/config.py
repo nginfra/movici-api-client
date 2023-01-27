@@ -10,7 +10,7 @@ import gimme
 
 from movici_api_client.cli.helpers import read_json_file
 
-from .exceptions import DuplicateContext, InvalidConfigFile, InvalidFile
+from .exceptions import Conflict, InvalidConfigFile, InvalidFile
 
 # "~" is properly expanded using pathlib.Path.expanduser() on all platforms including windows
 DEFAULT_CONFIG_LOCATION = "~/.movici.conf"
@@ -78,10 +78,10 @@ class Config:
 
     def add_context(self, context: Context):
         if self.get_context(context.name) is not None:
-            raise DuplicateContext({context.name})
+            raise Conflict("Context", context.name)
         self.contexts.append(context)
 
-    def remove_context(self, item: t.Union[str, Context]):
+    def delete_context(self, item: t.Union[str, Context]):
         try:
             if isinstance(item, str):
                 name = item
@@ -158,10 +158,13 @@ class SpecialKey:
             value = self.parse(value)
         dict.__setitem__(instance, self.name, value)
 
-    def __del__(self, instance):
+    def __delete__(self, instance):
         if self.required:
             raise ValueError("Cannot detele required key")
-        dict.__delitem__(instance, self.name)
+        try:
+            dict.__delitem__(instance, self.name)
+        except KeyError:
+            pass
 
     def __set_name__(self, owner, name):
         self.name = name

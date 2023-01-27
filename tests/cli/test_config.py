@@ -131,28 +131,28 @@ class TestConfig:
         config.activate_context("new-context")
         assert config.current_context.location == "https://some.url"
 
-    def test_remove_context_by_object(self, config):
+    def test_delete_context_by_object(self, config):
         context = config.contexts[0]
-        config.remove_context(context)
+        config.delete_context(context)
         assert context not in config.contexts
 
-    def test_remove_context_by_name(self, config):
+    def test_delete_context_by_name(self, config):
         context = config.contexts[0]
-        config.remove_context(context.name)
+        config.delete_context(context.name)
         assert context not in config.contexts
 
     def test_remove_active_context_deactivates(self, activated_config):
         context = activated_config.contexts[0]
-        activated_config.remove_context(context)
+        activated_config.delete_context(context)
         assert activated_config.current_context is None
 
     def test_remove_nonexisting_context(self, config):
-        config.remove_context("invalid")
+        config.delete_context("invalid")
         assert len(config.contexts) == 1
 
     def test_cannot_activate_removed_context(self, config):
         context = config.contexts[0]
-        config.remove_context(context)
+        config.delete_context(context)
         with pytest.raises(ValueError):
             config.activate_context(context.name)
 
@@ -215,3 +215,12 @@ class TestContext:
 
     def test_default_value(self, context):
         assert context["auth"] is True
+
+    def test_delete_special_key_with_default(self, context):
+        context.auth = False
+        del context.auth
+        assert context.auth
+
+    def test_cannot_delete_required_special_key(self, context):
+        with pytest.raises(ValueError):
+            del context.location

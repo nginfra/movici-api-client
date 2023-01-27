@@ -53,15 +53,17 @@ class Unauthenticated(MoviciCLIError):
 
 
 @dataclasses.dataclass
-class DuplicateContext(MoviciCLIError, ValueError):
+class NotFound(MoviciCLIError):
+    resource_type: str
     name: str
-    template = "Config {name} already exists"
+    template = "{resource_type} {name} not found"
 
 
 @dataclasses.dataclass
-class NoSuchContext(MoviciCLIError):
-    context: str
-    template = "Context {context} not found"
+class Conflict(MoviciCLIError):
+    resource_type: str
+    name: str
+    template = "{resource_type} {name} already exists"
 
 
 class NoContextAvailable(MoviciCLIError):
