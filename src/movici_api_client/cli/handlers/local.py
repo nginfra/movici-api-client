@@ -170,8 +170,11 @@ class LocalUpdateDatasetHandler(LocalDatasetsHandler):
 class LocalDeleteDatasetHandler(LocalDatasetsHandler):
     __event__ = DeleteDataset
 
-    async def handle(self, event: Event, mediator: Mediator):
-        return await super().handle(event, mediator)
+    async def handle(self, event: DeleteDataset, mediator: Mediator):
+        file = self.get_file_raise_on_not_found(event.name_or_uuid)
+        confirm(f"Are you sure you wish to delete dataset '{event.name_or_uuid}'")
+        file.unlink()
+        return "Dataset succesfully deleted"
 
 
 def parse_handler(handler: t.Type[EventHandler]):

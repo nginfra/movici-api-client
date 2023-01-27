@@ -12,6 +12,7 @@ from movici_api_client.cli.cqrs import Mediator
 from movici_api_client.cli.data_dir import MoviciDataDir
 from movici_api_client.cli.events.dataset import (
     CreateDataset,
+    DeleteDataset,
     GetAllDatasets,
     GetSingleDataset,
     UpdateDataset,
@@ -253,3 +254,12 @@ class TestLocalUpdateDatasetHandler:
     async def test_duplicate_target(self, mediator, binary_dataset, json_dataset):
         with pytest.raises(Conflict):
             await mediator.send(UpdateDataset(json_dataset["name"], name=binary_dataset))
+
+
+@pytest.mark.asyncio
+async def test_local_delete_dataset_handler(mediator, data_dir, patch_confirm, default_dataset):
+    assert data_dir.datasets().get_file_path_if_exists(default_dataset["name"])
+    await mediator.send(DeleteDataset(default_dataset["name"]))
+
+    assert patch_confirm.called
+    assert not data_dir.datasets().get_file_path_if_exists(default_dataset["name"])
