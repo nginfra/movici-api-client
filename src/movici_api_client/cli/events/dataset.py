@@ -28,13 +28,23 @@ class CreateDataset(Event):
     display_name: str
     type: t.Optional[str] = None
 
+    def payload(self):
+        return {
+            key: val for key in ("name", "display_name", "type") if (val := getattr(self, key))
+        }
+
 
 @dataclasses.dataclass
 class UpdateDataset(Event):
     name_or_uuid: str
-    name: str
-    display_name: str
+    name: t.Optional[str] = None
+    display_name: t.Optional[str] = None
     type: t.Optional[str] = None
+
+    def payload(self):
+        return {
+            key: val for key in ("name", "display_name", "type") if (val := getattr(self, key))
+        }
 
 
 @dataclasses.dataclass

@@ -1,7 +1,9 @@
+import pathlib
+
 import gimme
 
 from movici_api_client.cli.config import Config, Context, write_config
-from movici_api_client.cli.exceptions import DuplicateContext, NoContextAvailable, NoSuchContext
+from movici_api_client.cli.exceptions import Conflict, NoContextAvailable, NotFound
 
 from ..common import Controller
 from ..decorators import argument, command, format_output, option
@@ -14,17 +16,19 @@ class ConfigController(Controller):
     config: Config = gimme.attribute(Config)
 
     @command
-    @argument("name", required=False)
+    @argument("name")
     def create(self, name):
         config = self.config
-
         if config.get_context(name):
-            raise DuplicateContext(name)
+            raise Conflict("Context", name)
 
         echo("Creating a new context, please give the following information")
-        name = name or prompt("Name")
-        url = prompt("Base URL (eg: https://example.org/)")
-        context = Context(name, url)
+
+        is_local = confirm("Is this a local context?", abort=False)
+        location = get_local_location() if is_local else get_remote_location()
+        context = Context(name, location, local=is_local)
+        if is_local:
+            context["auth"] = False
         config.add_context(context)
 
         activate = confirm("Do you wish to activate this context?", default=True)
@@ -42,9 +46,15 @@ class ConfigController(Controller):
         try:
             config.activate_context(context)
         except ValueError:
-            raise NoSuchContext(context=context)
+            raise NotFound("Context", context)
 
         write_config(config)
+
+    @command
+    @argument("context")
+    def delete(self, context: str):
+        self.config.delete_context(context)
+        echo("Context succesfully deleted")
 
     @command
     @option("-a", "--all", is_flag=True)
@@ -84,3 +94,12 @@ class ConfigController(Controller):
 
         write_config(config)
         echo("Context succesfully updated")
+
+
+def get_remote_location():
+    return prompt("Base URL (eg: https://example.org/)")
+
+
+def get_local_location():
+    result = prompt("Path (eg: ~/movici)")
+    return str(pathlib.Path(result).resolve())

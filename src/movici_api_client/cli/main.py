@@ -10,7 +10,7 @@ from movici_api_client.api.common import parse_service_urls
 from movici_api_client.cli.cqrs import Mediator
 from movici_api_client.cli.data_dir import MoviciDataDir
 from movici_api_client.cli.exceptions import InvalidResource
-from movici_api_client.cli.handlers import REMOTE_HANDLERS
+from movici_api_client.cli.handlers import LOCAL_HANDLERS, REMOTE_HANDLERS
 
 from . import dependencies
 from .config import Config, get_config, write_config
@@ -32,16 +32,18 @@ def setup_dependencies():
     gimme.register(Client, setup_client)
     gimme.register(AsyncClient, AsyncClient.from_sync_client)
     gimme.register(Mediator, setup_mediator)
+    gimme.register(MoviciDataDir, setup_local_dir)
 
 
 def setup_client(config: Config):
     context = config.current_context
 
-    if context is None:
-        return Client()
+    if context is None or context.get("local"):
+        return Client("")
+
     auth = MoviciTokenAuth(auth_token=context.get("auth_token")) if context.get("auth") else False
     return Client(
-        base_url=context.url,
+        base_url=context.location,
         auth=auth,
         on_error=handle_http_error,
         service_urls=parse_service_urls(context, prefix="service."),
@@ -49,12 +51,20 @@ def setup_client(config: Config):
     )
 
 
+def setup_local_dir(config: Config):
+    context = config.current_context
+    if context is None or not context.get("local"):
+        return None
+
+    return MoviciDataDir.resolve_from_subpath(pathlib.Path(context.location))
+
+
 def setup_mediator(config: Config):
     context = config.current_context
 
     if context is not None and not context.get("local"):
         return Mediator(REMOTE_HANDLERS)
-    return Mediator()
+    return Mediator(LOCAL_HANDLERS)
 
 
 @option("project_override", "-p", "--project", default="")
@@ -90,7 +100,7 @@ def handle_global_error(exc: Exception):
 def login(ask_username):
     client = dependencies.get(Client)
     context = assert_current_context()
-    echo(f"Login to {context.url}:")
+    echo(f"Login to {context.location}:")
     LoginController(client, context).login(ask_username)
     write_config()
     echo("Success!")

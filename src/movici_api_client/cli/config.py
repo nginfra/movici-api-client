@@ -10,7 +10,7 @@ import gimme
 
 from movici_api_client.cli.helpers import read_json_file
 
-from .exceptions import DuplicateContext, InvalidConfigFile, InvalidFile
+from .exceptions import Conflict, InvalidConfigFile, InvalidFile
 
 # "~" is properly expanded using pathlib.Path.expanduser() on all platforms including windows
 DEFAULT_CONFIG_LOCATION = "~/.movici.conf"
@@ -78,10 +78,10 @@ class Config:
 
     def add_context(self, context: Context):
         if self.get_context(context.name) is not None:
-            raise DuplicateContext({context.name})
+            raise Conflict("Context", context.name)
         self.contexts.append(context)
 
-    def remove_context(self, item: t.Union[str, Context]):
+    def delete_context(self, item: t.Union[str, Context]):
         try:
             if isinstance(item, str):
                 name = item
@@ -140,55 +140,79 @@ class SpecialKey:
     default: t.Any = _MISSING
     required: bool = False
 
+    def __post_init__(self):
+        self.name = None
 
-class Context(dict):
-    __special_keys__ = {
-        "auth": SpecialKey(parse=parse_bool, default=True),
-        "name": SpecialKey(required=True),
-        "url": SpecialKey(required=True),
-    }
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+        try:
+            return dict.__getitem__(instance, self.name)
+        except KeyError:
+            if self.default is not _MISSING:
+                return self.default
+            raise AttributeError
 
-    def __init__(self, name: str, url: str, **kwargs) -> None:
-        super().__init__(name=name, url=url, **kwargs)
+    def __set__(self, instance, value):
+        if self.parse:
+            value = self.parse(value)
+        dict.__setitem__(instance, self.name, value)
 
-    def __getattribute__(self, name):
-        if name in type(self).__special_keys__:
-            return self[name]
-        return super().__getattribute__(name)
-
-    def __setattr__(self, name: str, value):
-        if name in self.__special_keys__:
-            self[name] = value
-        else:
-            super().__setattr__(name, value)
-
-    def __getitem__(self, key):
-        if (special := self.__special_keys__.get(key)) and special.default:
-            return self.get(key, special.default)
-        return super().__getitem__(key)
-
-    def __setitem__(self, key, value):
-        if (special := self.__special_keys__.get(key)) and special.parse:
-            value = special.parse(value)
-        super().__setitem__(key, value)
-
-    def __delitem__(self, key):
-        if (special := self.__special_keys__.get(key)) and special.required:
+    def __delete__(self, instance):
+        if self.required:
             raise ValueError("Cannot detele required key")
+        try:
+            dict.__delitem__(instance, self.name)
+        except KeyError:
+            pass
 
-        return super().__delitem__(key)
+    def __set_name__(self, owner, name):
+        self.name = name
+
+
+def special_key_dict(cls):
+    cls.__special_keys__ = {key for key in dir(cls) if isinstance(getattr(cls, key), SpecialKey)}
+
+    def special_keys_func(name, lookup_func):
+        def func(self, key, *args, **kwargs):
+            if key in self.__special_keys__:
+                return lookup_func(self, key, *args, **kwargs)
+            if parent_func := getattr(super(cls, self), name, None):
+                return parent_func(key, *args, **kwargs)
+
+        func.__name__ = name
+        return func
 
     def get(self, key, default=None):
-        if (special := self.__special_keys__.get(key)) and special.default:
-            default = special.default
+        if key not in self.__special_keys__:
+            return getattr(super(cls, self), "get")(key, default)
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            return default
 
-        return super().get(key, default)
+    cls.__getitem__ = special_keys_func("__getitem__", getattr)
+    cls.__setitem__ = special_keys_func("__setitem__", setattr)
+    cls.__delitem__ = special_keys_func("__delitem__", delattr)
+    cls.get = get
+
+    return cls
+
+
+@special_key_dict
+class Context(dict):
+    name = SpecialKey(required=True)
+    auth = SpecialKey(parse=parse_bool, default=True)
+    location = SpecialKey(required=True)
+    __special_keys__: t.Set[str]
+
+    def __init__(self, name: str, location: str, **kwargs) -> None:
+        super().__init__(name=name, location=location, **kwargs)
 
     def __eq__(self, __o: object) -> bool:
         if not isinstance(__o, Context):
             return False
-
-        return all((self.name == __o.name, self.url == __o.url, super().__eq__(__o)))
+        return super().__eq__(__o)
 
     def as_dict(self):
-        return {"name": self.name, "url": self.url, **self}
+        return dict(self)

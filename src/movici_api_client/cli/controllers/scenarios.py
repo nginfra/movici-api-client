@@ -35,14 +35,25 @@ class ScenarioController(Controller):
     decorators = (authenticated,)
 
     @command(name="scenarios", group="get")
-    @format_output
+    @cli_options("inspect_local")
+    @format_output(
+        fields=(
+            "uuid",
+            "name",
+            "display_name",
+            "created_on",
+            "last_modified",
+            "status",
+            "has_timeline",
+        )
+    )
     @handle_event
     def list(self):
         return GetAllScenarios()
 
     @command
     @argument("name_or_uuid")
-    @cli_options("output")
+    @cli_options("output", "inspect_local")
     @format_output(
         fields=(
             "uuid",
