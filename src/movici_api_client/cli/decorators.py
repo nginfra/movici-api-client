@@ -174,6 +174,15 @@ _CLI_OPTIONS = {
         is_flag=True,
         help="read files to infer meta data and enforce consistency",
     ),
+    "inspect_local": {
+        "name": "inspect",
+        "option": option(
+            "-i",
+            "--inspect",
+            is_flag=True,
+            help="read files to infer meta data and enforce consistency (local contexts only)",
+        ),
+    },
     "create": option("--create", is_flag=True, help="Always create if necessary"),
     "overwrite": option("--overwrite", is_flag=True, help="Always overwrite"),
     "no_overwrite": option("-n", "--no-overwrite", is_flag=True, help="Never overwrite"),
@@ -188,7 +197,17 @@ _CLI_OPTIONS = {
 
 
 def cli_options(*options: str):
-    click_options = combine_decorators(_CLI_OPTIONS[option] for option in options)
+    def get_option(opt):
+        if isinstance(opt, dict):
+            opt = opt["option"]
+        return opt
+
+    def get_name(option: str):
+        if isinstance(_CLI_OPTIONS[option], dict):
+            return _CLI_OPTIONS[option]["name"]
+        return option
+
+    click_options = combine_decorators(get_option(_CLI_OPTIONS[option]) for option in options)
 
     def decorator(func):
         @click_options
@@ -198,11 +217,12 @@ def cli_options(*options: str):
             params = gimme.that(CLIParameters)
 
             for option in options:
+                option = get_name(option)
                 if option not in kwargs:
                     continue
                 result = kwargs.pop(option)
                 setattr(params, option, result)
-            func(*args, **kwargs)
+            return func(*args, **kwargs)
 
         return wrapped
 

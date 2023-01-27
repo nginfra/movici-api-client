@@ -1,7 +1,7 @@
 import json
 import pathlib
 from contextvars import Context
-from unittest.mock import patch
+from unittest.mock import call, patch
 from uuid import UUID
 
 import pytest
@@ -13,6 +13,7 @@ from movici_api_client.cli.data_dir import MoviciDataDir
 from movici_api_client.cli.events.dataset import (
     CreateDataset,
     DeleteDataset,
+    EditDataset,
     GetAllDatasets,
     GetSingleDataset,
     UpdateDataset,
@@ -153,7 +154,7 @@ class TestLocalDatasetHandler:
         raw_data = json.dumps(dataset).encode() if isinstance(dataset, dict) else dataset
         file.write_bytes(raw_data)
         handler = LocalDatasetsHandler(params=CLIParameters(inspect=inspect), directory=None)
-        assert handler.get_dataset_meta(file) == expected
+        assert handler.get_resource_meta(file) == expected
 
     @pytest.mark.parametrize(
         "file, dataset_type, expected_type, expected_format",
@@ -263,3 +264,14 @@ async def test_local_delete_dataset_handler(mediator, data_dir, patch_confirm, d
 
     assert patch_confirm.called
     assert not data_dir.datasets().get_file_path_if_exists(default_dataset["name"])
+
+
+@pytest.mark.asyncio
+async def test_edit_dataset(mediator, data_dir, default_dataset):
+    file = data_dir.datasets().get_file_path(default_dataset["name"] + ".json")
+    edit_result = {"edited": "data"}
+    with patch.object(movici_api_client.cli.handlers.local, "edit_resource") as edit_resource:
+        edit_resource.return_value = edit_result
+        await mediator.send(EditDataset(name_or_uuid=default_dataset["name"]))
+    assert edit_resource.call_args == call(default_dataset)
+    assert json.loads(file.read_text()) == {"edited": "data"}
