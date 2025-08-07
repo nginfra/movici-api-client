@@ -1,8 +1,8 @@
 unittest:
 	poetry run pytest -v tests/
 
-flake8:
-	poetry run flake8 src/ tests/
+ruff:
+	poetry run ruff check .
 
 black-check:
 	poetry run black --check .
@@ -13,7 +13,7 @@ isort:
 isort-check:
 	poetry run isort -c .
 
-lint: flake8 black-check isort-check
+lint: ruff black-check isort-check
 	
 test-all: lint unittest
 
