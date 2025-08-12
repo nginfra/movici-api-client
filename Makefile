@@ -4,8 +4,8 @@ unittest:
 ruff:
 	poetry run ruff check .
 
-black-check:
-	poetry run black --check .
+format-check:
+	poetry run ruff format --check .
 
 isort:
 	poetry run isort .
@@ -13,7 +13,7 @@ isort:
 isort-check:
 	poetry run isort -c .
 
-lint: ruff black-check isort-check
+lint: ruff format-check
 
 test-all: lint unittest
 

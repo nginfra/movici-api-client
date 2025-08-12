@@ -32,7 +32,7 @@ def test_login_calls_client(controller, client):
     controller.login(ask_username=True)
     request = client.request.call_args[0][0]
     assert request.username == "user"
-    assert request.password == "pw"
+    assert request.password == "pw"  # noqa: S105
 
 
 def test_login_prompts_again_after_failure(controller, prompt):
@@ -49,13 +49,13 @@ def test_login_asks_for_username_when_instructed(controller, prompt, context, cl
     controller.login(ask_username=True)
     request = client.request.call_args[0][0]
     assert request.username == "other_user"
-    assert request.password == "password"
+    assert request.password == "password"  # noqa: S105
 
 
 def test_login_writes_info_to_config(prompt, controller, context):
     controller.login(ask_username=True)
     assert context["username"] == "user"
-    assert context["auth_token"] == "some_session_token"
+    assert context["auth_token"] == "some_session_token"  # noqa: S105
 
 
 def test_login_reads_username_from_context(controller, prompt, context, client):
@@ -68,7 +68,7 @@ def test_login_reads_username_from_context(controller, prompt, context, client):
 
     request = client.request.call_args[0][0]
     assert request.username == "some_user"
-    assert request.password == "correct_password"
+    assert request.password == "correct_password"  # noqa: S105
 
 
 @pytest.mark.parametrize(

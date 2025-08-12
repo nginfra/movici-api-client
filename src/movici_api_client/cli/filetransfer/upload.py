@@ -105,7 +105,7 @@ class UploadResource(Task):
 
         do_overwrite = resolve_question_flag(
             overwrite,
-            (f"{resource_type.capitalize()} {name} already has data, " "do you wish to overwrite?"),
+            (f"{resource_type.capitalize()} {name} already has data, do you wish to overwrite?"),
         )
         if not do_overwrite:
             echo(f"Cowardly refusing to overwrite data for {resource_type} '{name}'")

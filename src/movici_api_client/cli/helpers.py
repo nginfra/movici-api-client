@@ -29,7 +29,7 @@ def edit_resource(resource: dict, editor=None, editor_env="EDITOR", default_edit
             fh.write(initial_message)
 
         try:
-            call(make_editor_command(EDITOR, file))
+            call(make_editor_command(EDITOR, file))  # noqa: S603
         except FileNotFoundError:
             raise InvalidEditor(EDITOR)
 

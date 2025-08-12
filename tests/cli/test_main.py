@@ -29,5 +29,5 @@ def test_login_saves_context(cli, client, config_path):
     runner = click.testing.CliRunner()
     runner.invoke(cli, ["login"], input="user\npw\n", catch_exceptions=False)
     config = read_config(config_path)
-    assert config.current_context["auth_token"] == "some_auth_token"
+    assert config.current_context["auth_token"] == "some_auth_token"  # noqa: S105
     assert config.current_context["username"] == "user"
