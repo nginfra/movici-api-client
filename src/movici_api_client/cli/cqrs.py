@@ -10,8 +10,8 @@ class Event:
 
 
 class EventHandler:
-    __event__: t.Type[Event] = None
-    __result_type__: t.Optional(t.Type) = None
+    __event__: type[Event] = None
+    __result_type__: t.Optional(type) = None
 
     async def handle(self, event: Event, mediator: Mediator):
         raise NotImplementedError
@@ -19,7 +19,7 @@ class EventHandler:
 
 class Mediator:
     def __init__(self, handlers=None) -> None:
-        self.handlers: t.Dict[t.Type[Event], t.Type[EventHandler]] = handlers or {}
+        self.handlers: dict[type[Event], type[EventHandler]] = handlers or {}
 
     async def send(self, event: Event):
         try:
@@ -29,11 +29,11 @@ class Mediator:
         handler = gimme.that(cls)
         return await handler.handle(event, self)
 
-    def add_handler(self, event: t.Type[Event], handler: t.Type[EventHandler]):
+    def add_handler(self, event: type[Event], handler: type[EventHandler]):
         if event in self.handlers:
             raise ValueError(f"Event type {event.__name__} already has a registered handler")
         self.handlers[event] = handler
 
-    def add_handlers(self, handlers: t.Dict[Event, t.Type[EventHandler]]):
+    def add_handlers(self, handlers: dict[Event, type[EventHandler]]):
         for event, handler in handlers.items():
             self.add_handler(event, handler)

@@ -45,7 +45,10 @@ def register_controller_reversed(group: click.Group, controller: Controller):
 
 
 def register_command_in_subgroup(
-    group: click.Group, subgroup_name, command: callable, command_name=None
+    group: click.Group,
+    subgroup_name,
+    command: callable,
+    command_name=None,
 ):
     if subgroup := group.commands.get(subgroup_name):
         if not isinstance(subgroup, click.Group):

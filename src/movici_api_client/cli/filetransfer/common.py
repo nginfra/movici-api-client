@@ -14,7 +14,7 @@ class Task:
     client: IAsyncClient = gimme.attribute(IAsyncClient)
     params: CLIParameters = gimme.attribute(CLIParameters)
 
-    async def run(self) -> t.Optional[bool]:
+    async def run(self) -> bool | None:
         raise NotImplementedError
 
     def create_task(self):
@@ -30,7 +30,7 @@ class SequentialTaskGroup(Task):
         self.progress = progress
         self.description = description
 
-    async def run(self) -> t.Optional[bool]:
+    async def run(self) -> bool | None:
         tasks = tqdm(self.tasks, desc=self.description) if self.progress else self.tasks
         for task in tasks:
             result = await task.run()
@@ -48,7 +48,7 @@ class ParallelTaskGroup(Task):
         self.progress = progress
         self.description = description
 
-    async def run(self) -> t.Optional[bool]:
+    async def run(self) -> bool | None:
         tasks = [task.create_task() for task in self.tasks]
         coros = asyncio.as_completed(tasks)
 

@@ -5,7 +5,6 @@ import tabulate
 
 
 def format_anything(obj, fields):
-
     if isinstance(obj, list):
         return format_table(obj, fields)
     if callable(as_dict := getattr(obj, "as_dict", None)):
@@ -34,9 +33,11 @@ def format_object(obj, fields: t.Sequence[str], header=None):
 
 
 def format_dict(
-    obj, include: t.Sequence[str] = None, exclude: t.Sequence[str] = None, header=None
+    obj,
+    include: t.Sequence[str] = None,
+    exclude: t.Sequence[str] = None,
+    header=None,
 ):
-
     if include is not None:
         keys = include
     else:
@@ -54,11 +55,10 @@ def format_dataclass(dc, header=None):
 def get_value(obj_or_dict, key, default=None):
     if isinstance(obj_or_dict, dict):
         return obj_or_dict.get(key, default)
-    else:
-        return getattr(obj_or_dict, key, default)
+    return getattr(obj_or_dict, key, default)
 
 
-def pick(obj, attrs: t.List[str], default=None):
+def pick(obj, attrs: list[str], default=None):
     return {key: get_value(obj, key, default) for key in attrs}
 
 

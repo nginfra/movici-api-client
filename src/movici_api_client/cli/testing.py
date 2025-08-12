@@ -16,7 +16,7 @@ class FakeClient(Client):
         response = self.next_response()
 
         if response is None:
-            return
+            return None
         if response.status_code >= 400 and on_error is not None:
             on_error(response)
         else:

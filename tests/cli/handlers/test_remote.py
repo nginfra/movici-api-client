@@ -159,7 +159,8 @@ async def test_remote_get_single_project_handler(gimme_repo, mediator, client):
     client.add_response([proj])
     client.add_response(proj)
     result = await gimme_repo.get(RemoteGetSingleProjectHandler).handle(
-        GetSingleProject(name_or_uuid="some_project"), mediator
+        GetSingleProject(name_or_uuid="some_project"),
+        mediator,
     )
     assert client.request.await_args_list == [
         call(req.GetProjects()),
@@ -173,7 +174,8 @@ async def test_remote_create_project_handler(gimme_repo, mediator, client):
     expected = {"result": "ok"}
     client.add_response(expected)
     result = await gimme_repo.get(RemoteCreateProjectHandler).handle(
-        CreateProject(name="some_project", display_name="Some Project"), mediator
+        CreateProject(name="some_project", display_name="Some Project"),
+        mediator,
     )
     assert client.request.await_args_list == [
         call(req.CreateProject(name="some_project", display_name="Some Project")),
@@ -187,7 +189,8 @@ async def test_remote_update_project_handler(gimme_repo, mediator, client):
     proj = {"uuid": "0000-0000", "name": "some_project"}
     client.add_response([proj])
     await gimme_repo.get(RemoteUpdateProjectHandler).handle(
-        UpdateProject(name_or_uuid="some_project", display_name="New Project"), mediator
+        UpdateProject(name_or_uuid="some_project", display_name="New Project"),
+        mediator,
     )
     assert client.request.await_args_list == [
         call(req.GetProjects()),
@@ -202,7 +205,8 @@ async def test_remote_update_project_handler_raises_on_no_change(gimme_repo, med
 
     with pytest.raises(NoChangeDetected):
         await gimme_repo.get(RemoteUpdateProjectHandler).handle(
-            UpdateProject(name_or_uuid="some_project", display_name=None), mediator
+            UpdateProject(name_or_uuid="some_project", display_name=None),
+            mediator,
         )
 
 
@@ -215,7 +219,8 @@ async def test_remote_delete_project_handler(gimme_repo, mediator, client):
 
     with patch.object(movici_api_client.cli.handlers.remote, "confirm"):
         await gimme_repo.get(RemoteDeleteProjectHandler).handle(
-            DeleteProject(name_or_uuid="some_project"), mediator
+            DeleteProject(name_or_uuid="some_project"),
+            mediator,
         )
     assert [r[0][0] for r in client.request.await_args_list] == [
         req.GetProjects(),
@@ -227,11 +232,16 @@ async def test_remote_delete_project_handler(gimme_repo, mediator, client):
 
 @pytest.mark.asyncio
 async def test_remote_upload_project_handler(
-    gimme_repo, mediator, cli_params, data_dir, valid_project_uuid
+    gimme_repo,
+    mediator,
+    cli_params,
+    data_dir,
+    valid_project_uuid,
 ):
     with patch.object(filetransfer, "UploadProject", new_callable=AsyncMock) as mock:
         await gimme_repo.get(RemoteUploadProjectHandler).handle(
-            UploadProject(directory=data_dir), mediator
+            UploadProject(directory=data_dir),
+            mediator,
         )
     assert mock.await_args == call(data_dir, uuid=valid_project_uuid)
     assert cli_params.with_simulation and cli_params.with_views
@@ -239,11 +249,16 @@ async def test_remote_upload_project_handler(
 
 @pytest.mark.asyncio
 async def test_remote_download_project_handler(
-    gimme_repo, mediator, cli_params, data_dir, valid_project_uuid
+    gimme_repo,
+    mediator,
+    cli_params,
+    data_dir,
+    valid_project_uuid,
 ):
     with patch.object(filetransfer, "DownloadProject", new_callable=AsyncMock) as mock:
         await gimme_repo.get(RemoteDownloadProjectHandler).handle(
-            DownloadProject(directory=data_dir), mediator
+            DownloadProject(directory=data_dir),
+            mediator,
         )
     assert mock.await_args == call(parent={"uuid": valid_project_uuid}, directory=data_dir)
 
@@ -266,10 +281,19 @@ def simple_events():
         ),
     )
     event = UpdateDataset(
-        name_or_uuid=uuid1, name="new_name", display_name="Some Dataset", type="some_type"
+        name_or_uuid=uuid1,
+        name="new_name",
+        display_name="Some Dataset",
+        type="some_type",
     )
-    yield event, req.UpdateDataset(
-        uuid1, name=event.name, type=event.type, display_name=event.display_name
+    yield (
+        event,
+        req.UpdateDataset(
+            uuid1,
+            name=event.name,
+            type=event.type,
+            display_name=event.display_name,
+        ),
     )
     yield ClearDataset(uuid1), req.DeleteDatasetData(uuid1)
     yield GetAllScenarios(), req.GetScenarios(project_uuid)
@@ -318,7 +342,9 @@ async def test_remote_edit_resource_handlers(event_cls, request_cls, mediator, c
 
 
 @patch.object(
-    filetransfer.UploadStrategy, "__eq__", lambda self, other: isinstance(other, type(self))
+    filetransfer.UploadStrategy,
+    "__eq__",
+    lambda self, other: isinstance(other, type(self)),
 )
 @pytest.mark.asyncio
 async def test_remote_upload_dataset_handler(mediator, valid_project_uuid):
@@ -327,7 +353,7 @@ async def test_remote_upload_dataset_handler(mediator, valid_project_uuid):
             UploadDataset(
                 name_or_uuid="some_name",
                 file="some_file.json",
-            )
+            ),
         )
     assert mock.await_args == call(
         file="some_file.json",
@@ -338,11 +364,12 @@ async def test_remote_upload_dataset_handler(mediator, valid_project_uuid):
 
 
 @patch.object(
-    filetransfer.UploadStrategy, "__eq__", lambda self, other: isinstance(other, type(self))
+    filetransfer.UploadStrategy,
+    "__eq__",
+    lambda self, other: isinstance(other, type(self)),
 )
 @pytest.mark.asyncio
 async def test_remote_upload_multiple_datasets_handler(mediator, data_dir, valid_project_uuid):
-
     with patch.object(filetransfer, "UploadMultipleResources", new_callable=AsyncMock) as mock:
         await mediator.send(UploadMultipleDatasets(directory=data_dir))
     assert mock.await_args == call(
@@ -416,7 +443,7 @@ async def test_remote_upload_scenario_handler(mediator, valid_project_uuid):
             UploadScenario(
                 name_or_uuid="some_name",
                 file="some_file.json",
-            )
+            ),
         )
     assert mock.await_args == call(
         file="some_file.json",
@@ -426,11 +453,12 @@ async def test_remote_upload_scenario_handler(mediator, valid_project_uuid):
 
 
 @patch.object(
-    filetransfer.UploadStrategy, "__eq__", lambda self, other: isinstance(other, type(self))
+    filetransfer.UploadStrategy,
+    "__eq__",
+    lambda self, other: isinstance(other, type(self)),
 )
 @pytest.mark.asyncio
 async def test_remote_upload_multiple_scenarios_handler(mediator, data_dir, valid_project_uuid):
-
     with patch.object(filetransfer, "UploadMultipleResources", new_callable=AsyncMock) as mock:
         await mediator.send(UploadMultipleScenarios(directory=data_dir))
     assert mock.await_args == call(
@@ -455,5 +483,7 @@ async def test_remote_download_multiple_scenarios_handler(mediator, data_dir, va
         await mediator.send(DownloadMultipleScenarios(directory=data_dir))
 
     assert mock.await_args == call(
-        {"uuid": valid_project_uuid}, directory=data_dir, progress=False
+        {"uuid": valid_project_uuid},
+        directory=data_dir,
+        progress=False,
     )

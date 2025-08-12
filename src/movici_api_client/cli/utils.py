@@ -5,9 +5,8 @@ import uuid
 
 import gimme
 import questionary
-from click import Abort, Choice
+from click import Abort, Choice, confirm, echo, prompt
 from click import Path as PathType
-from click import confirm, echo, prompt
 
 from movici_api_client.api.client import Client
 from movici_api_client.api.common import Request
@@ -33,10 +32,18 @@ confirm = confirm
 Choice = Choice
 
 DirPath = functools.partial(
-    PathType, file_okay=False, readable=True, exists=True, path_type=pathlib.Path
+    PathType,
+    file_okay=False,
+    readable=True,
+    exists=True,
+    path_type=pathlib.Path,
 )
 FilePath = functools.partial(
-    PathType, dir_okay=False, readable=True, exists=True, path_type=pathlib.Path
+    PathType,
+    dir_okay=False,
+    readable=True,
+    exists=True,
+    path_type=pathlib.Path,
 )
 
 
@@ -104,8 +111,7 @@ def get_resource_from_list(name_or_uuid, all_resources, resource_type="resource"
     for res in all_resources:
         if name_or_uuid == res[match_field]:
             return res
-    else:
-        raise InvalidResource(resource_type, name_or_uuid)
+    raise InvalidResource(resource_type, name_or_uuid)
 
 
 def handle_movici_error(e: MoviciCLIError):
@@ -139,7 +145,7 @@ async def prompt_choices_async(question: str, choices: t.Sequence[str]):
     ).unsafe_ask_async()
 
 
-def validate_uuid(entry: t.Union[str, uuid.UUID]):
+def validate_uuid(entry: str | uuid.UUID):
     if isinstance(entry, uuid.UUID):
         return True
     try:
@@ -150,7 +156,7 @@ def validate_uuid(entry: t.Union[str, uuid.UUID]):
     return True
 
 
-def maybe_set_flag(flag: bool, default_yes: bool, default_no: bool) -> t.Optional[bool]:
+def maybe_set_flag(flag: bool, default_yes: bool, default_no: bool) -> bool | None:
     """Returns the value for a question-like flag. These flags can be set to either True/False or
     None in which case the user should be asked. If the flag is not specifically set to True and no
     default is given, flag is set to None. A positive flag value has precedence over a default no.

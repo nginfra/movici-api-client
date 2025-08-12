@@ -30,9 +30,3 @@ CLI Usage
   movici download project --zip
   movici download scenario --include-data
   movici upload scenario --include-data --overwrite
-  
-
-
-
-
-

@@ -55,7 +55,7 @@ class ScenarioController(Controller):
             "last_modified",
             "status",
             "has_timeline",
-        )
+        ),
     )
     def get(self, name_or_uuid):
         result = asyncio.run(self.mediator.send(GetSingleScenario(name_or_uuid=name_or_uuid)))

@@ -40,7 +40,7 @@ class DatasetController(Controller):
             "display_name",
             "type",
             "has_data",
-        )
+        ),
     )
     @handle_event
     def list(self):
@@ -56,7 +56,7 @@ class DatasetController(Controller):
             "type",
             "format",
             "has_data",
-        )
+        ),
     )
     @handle_event
     def get(self, name_or_uuid):
@@ -82,7 +82,10 @@ class DatasetController(Controller):
     @handle_event
     def update(self, name_or_uuid, name, display_name, type):
         return UpdateDataset(
-            name_or_uuid=name_or_uuid, name=name, display_name=display_name, type=type
+            name_or_uuid=name_or_uuid,
+            name=name,
+            display_name=display_name,
+            type=type,
         )
 
     @command

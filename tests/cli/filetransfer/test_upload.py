@@ -7,11 +7,7 @@ import movici_api_client.cli.filetransfer.common
 import movici_api_client.cli.filetransfer.upload
 from movici_api_client.api.client import AsyncClient
 from movici_api_client.cli.common import CLIParameters
-from movici_api_client.cli.filetransfer import (
-    DatasetUploadStrategy,
-    UploadResource,
-    UploadStrategy,
-)
+from movici_api_client.cli.filetransfer import DatasetUploadStrategy, UploadResource, UploadStrategy
 
 
 @pytest.fixture
@@ -58,7 +54,10 @@ class TestUploadResource:
         def _make_task(overwrite=None, create_new=None, inspect=None, **kwargs):
             gimme_repo.add(CLIParameters(overwrite=overwrite, create=create_new, inspect=inspect))
             return UploadResource(
-                file=upload_file, parent_uuid=project_uuid, strategy=strategy, **kwargs
+                file=upload_file,
+                parent_uuid=project_uuid,
+                strategy=strategy,
+                **kwargs,
             )
 
         return _make_task
@@ -75,18 +74,27 @@ class TestUploadResource:
         await task.run()
 
         assert strategy.create_new.await_args == call(
-            task.parent_uuid, file=upload_file, name=upload_file.stem, inspect=False
+            task.parent_uuid,
+            file=upload_file,
+            name=upload_file.stem,
+            inspect=False,
         )
 
     @pytest.mark.asyncio
     async def test_create_new_can_override_name(self, make_task, strategy, upload_file):
         strategy.get_all.return_value = []
         task = make_task(
-            overwrite=False, create_new=True, inspect=False, name_or_uuid="alternative"
+            overwrite=False,
+            create_new=True,
+            inspect=False,
+            name_or_uuid="alternative",
         )
         await task.run()
         assert strategy.create_new.await_args == call(
-            task.parent_uuid, file=upload_file, name="alternative", inspect=False
+            task.parent_uuid,
+            file=upload_file,
+            name="alternative",
+            inspect=False,
         )
 
     @pytest.mark.asyncio
@@ -123,7 +131,12 @@ class TestUploadResource:
     )
     @pytest.mark.asyncio
     async def test_overwrites_when_checks_pass(
-        self, require_overwrite_question, determine_overwrite, update_called, make_task, strategy
+        self,
+        require_overwrite_question,
+        determine_overwrite,
+        update_called,
+        make_task,
+        strategy,
     ):
         strategy.get_all.return_value = [{"name": "dataset"}]
         strategy.require_overwrite_question.return_value = require_overwrite_question
@@ -173,7 +186,8 @@ class TestDatasetUploadStrategy:
         strategy.all_dataset_types = ["a", "b"]
         file = add_dataset(filename, data)
         with patch.object(
-            movici_api_client.cli.filetransfer.upload, "prompt_choices_async"
+            movici_api_client.cli.filetransfer.upload,
+            "prompt_choices_async",
         ) as prompt:
             prompt.return_value = self.prompt_sentinel
             assert await strategy.infer_dataset_type(file, inspect) == expected_value

@@ -115,7 +115,7 @@ def activate_project(project):
 
 
 @command(name="initialize-data-dir")
-@argument("directory", type=PathType(), default=pathlib.Path("."))
+@argument("directory", type=PathType(), default=pathlib.Path())
 def initialize_data_dir(directory):
     MoviciDataDir.initialize(pathlib.Path(directory))
     echo("Succesfully initialized movici data directory")

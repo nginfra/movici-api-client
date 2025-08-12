@@ -9,12 +9,12 @@ black-check:
 
 isort:
 	poetry run isort .
-	
+
 isort-check:
 	poetry run isort -c .
 
 lint: ruff black-check isort-check
-	
+
 test-all: lint unittest
 
 level=patch

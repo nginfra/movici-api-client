@@ -156,9 +156,12 @@ def upload_options(func):
             option("-y", "--yes", is_flag=True, help="Answer yes to all questions"),
             option("-n", "--no", is_flag=True, help="Answer no to all questions"),
             option(
-                "-o", "--output", type=Choice(["json"], case_sensitive=False), help="output format"
+                "-o",
+                "--output",
+                type=Choice(["json"], case_sensitive=False),
+                help="output format",
             ),
-        ]
+        ],
     )(func)
 
 
@@ -171,7 +174,7 @@ def download_options(
                 data_directory_option(purpose),
                 option("-o", "-y", "--overwrite", is_flag=True, help="Always overwrite"),
                 option("-n", "--no-overwrite", is_flag=True, help="Never overwrite"),
-            ]
+            ],
         )(func)
 
     return decorator
@@ -211,7 +214,10 @@ _CLI_OPTIONS = {
     "yes": option("-y", "--yes", is_flag=True, help="Answer yes to all questions"),
     "no": option("-n", "--no", is_flag=True, help="Answer no to all questions"),
     "output": option(
-        "-o", "--output", type=Choice(["json"], case_sensitive=False), help="output format"
+        "-o",
+        "--output",
+        type=Choice(["json"], case_sensitive=False),
+        help="output format",
     ),
     "with_simulation": option("--with-simulation", is_flag=True),
     "with_views": option("--with-views", is_flag=True),

@@ -34,10 +34,10 @@ def config_path(tmp_path):
                     {
                         "name": "test_context",
                         "url": "https://example.org",
-                    }
+                    },
                 ],
-            }
-        )
+            },
+        ),
     )
 
     return file
@@ -53,4 +53,4 @@ def read_config(config_path):
 
 @pytest.fixture(autouse=True)
 def reset_dependencies():
-    yield
+    return

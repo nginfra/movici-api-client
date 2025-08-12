@@ -14,9 +14,7 @@ class ResourceQuery:
         raise NotImplementedError
 
     async def get_uuid(self, name_or_uuid):
-        return (
-            name_or_uuid if validate_uuid(name_or_uuid) else await self.assert_uuid(name_or_uuid)
-        )
+        return name_or_uuid if validate_uuid(name_or_uuid) else await self.assert_uuid(name_or_uuid)
 
     async def get_uuids(self):
         request = self.request_all()
@@ -40,8 +38,7 @@ class ResourceQuery:
         for res in all_resources:
             if name_or_uuid == res[match_field]:
                 return res
-        else:
-            raise InvalidResource(self.resource_type, name_or_uuid)
+        raise InvalidResource(self.resource_type, name_or_uuid)
 
 
 class ProjectQuery(ResourceQuery):

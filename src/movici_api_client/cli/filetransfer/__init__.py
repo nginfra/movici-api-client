@@ -20,6 +20,7 @@ from .upload import (
 )
 
 __all__ = [
+    "DatasetUploadStrategy",
     "DownloadDatasets",
     "DownloadProject",
     "DownloadResource",
@@ -27,7 +28,6 @@ __all__ = [
     "DownloadSingleScenario",
     "DownloadViews",
     "RecursivelyDownloadResource",
-    "DatasetUploadStrategy",
     "ScenarioUploadStrategy",
     "UpdateScenario",
     "UploadDataset",

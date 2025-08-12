@@ -40,17 +40,16 @@ class UploadResource(Task):
         file: pathlib.Path,
         parent_uuid: str,
         strategy: UploadStrategy,
-        name_or_uuid: t.Optional[str] = None,
-        all_resources: t.Optional[t.Sequence[dict]] = None,
+        name_or_uuid: str | None = None,
+        all_resources: t.Sequence[dict] | None = None,
     ) -> None:
-
         self.file = file
         self.parent_uuid = parent_uuid
         self.name_or_uuid = name_or_uuid
         self.all_resources = all_resources
         self.strategy = strategy
 
-    async def run(self) -> t.Optional[bool]:
+    async def run(self) -> bool | None:
         async with self.client:
             name, existing = await self.get_existing()
 
@@ -64,9 +63,10 @@ class UploadResource(Task):
                     )
 
             if self.strategy.require_overwrite_question(existing) and not self.determine_overwrite(
-                self.params.overwrite, name
+                self.params.overwrite,
+                name,
             ):
-                return
+                return None
 
             return await self.strategy.update_existing(existing, self.file, self.params.inspect)
 
@@ -74,7 +74,7 @@ class UploadResource(Task):
         if self.all_resources is None:
             self.all_resources = await self.strategy.get_all(self.parent_uuid)
 
-    async def get_existing(self) -> t.Optional[dict]:
+    async def get_existing(self) -> dict | None:
         await self.ensure_all_resources()
         name_or_uuid, all_resources = self.name_or_uuid, self.all_resources
         if not name_or_uuid:
@@ -105,10 +105,7 @@ class UploadResource(Task):
 
         do_overwrite = resolve_question_flag(
             overwrite,
-            (
-                f"{resource_type.capitalize()} {name} already has data, "
-                "do you wish to overwrite?"
-            ),
+            (f"{resource_type.capitalize()} {name} already has data, " "do you wish to overwrite?"),
         )
         if not do_overwrite:
             echo(f"Cowardly refusing to overwrite data for {resource_type} '{name}'")
@@ -126,7 +123,7 @@ class UploadMultipleResources(Task):
         self.parent_uuid = parent_uuid
         self.strategy = strategy
 
-    async def run(self) -> t.Optional[bool]:
+    async def run(self) -> bool | None:
         all_resources = await self.strategy.get_all(self.parent_uuid)
         async with self.client:
             for file in tqdm(
@@ -157,7 +154,7 @@ class UploadScenario(Task):
         self.all_resources = all_resources
         self.strategy = strategy or ScenarioUploadStrategy(self.client)
 
-    async def run(self) -> t.Optional[bool]:
+    async def run(self) -> bool | None:
         uuid = await UploadResource(
             file=self.file,
             parent_uuid=self.parent_uuid,
@@ -214,7 +211,7 @@ class UploadTimeline(Task):
         self.parent_uuid = parent_uuid
         self.scenario = scenario
 
-    async def run(self) -> t.Optional[bool]:
+    async def run(self) -> bool | None:
         async with self.client:
             scenario = await self.ensure_scenario()
             await self.recreate_timeline(scenario)
@@ -234,7 +231,7 @@ class UploadTimeline(Task):
 
     async def ensure_scenario(self):
         self.scenario = self.scenario or await self.client.request(
-            GetSingleScenario(self.parent_uuid)
+            GetSingleScenario(self.parent_uuid),
         )
         return self.scenario
 
@@ -244,7 +241,7 @@ class UploadUpdate(Task):
         self.parent_uuid = parent_uuid
         self.file = file
 
-    async def run(self) -> t.Optional[bool]:
+    async def run(self) -> bool | None:
         try:
             payload = self.prepare_payload()
         except ValueError as e:
@@ -252,7 +249,7 @@ class UploadUpdate(Task):
             return
         await self.client.request(CreateUpdate(self.parent_uuid, payload))
 
-    def prepare_payload(self) -> t.Optional[dict]:
+    def prepare_payload(self) -> dict | None:
         try:
             contents = read_json_file(self.file)
         except InvalidFile:
@@ -260,7 +257,8 @@ class UploadUpdate(Task):
 
         if {"name", "timestamp", "iteration"} - contents.keys():
             match = re.match(
-                r"t(?P<timestamp>\d+)_(?P<iteration>\d+)_(?P<dataset>\w+)\..*", self.file.name
+                r"t(?P<timestamp>\d+)_(?P<iteration>\d+)_(?P<dataset>\w+)\..*",
+                self.file.name,
             )
             if not match:
                 raise ValueError("Could not determine required update info")
@@ -285,7 +283,7 @@ class UploadProject(Task):
         self.uuid = uuid
         self.all_resources = all_resources
 
-    async def run(self) -> t.Optional[bool]:
+    async def run(self) -> bool | None:
         for strategy_kind in (DatasetUploadStrategy, ScenarioUploadStrategy):
             strategy = strategy_kind(self.client)
             await UploadMultipleResources(
@@ -296,10 +294,10 @@ class UploadProject(Task):
 
 
 class UploadStrategy:
-    extensions: t.Optional[t.Collection]
+    extensions: t.Collection | None
     messages: dict
     resource_type: str = "resource"
-    upload_task: t.Type[Task] = UploadResource
+    upload_task: type[Task] = UploadResource
 
     def __init__(self, client: IAsyncClient):
         self.client = client
@@ -321,7 +319,7 @@ class UploadStrategy:
 
 
 class DatasetUploadStrategy(UploadStrategy):
-    extensions = {".json", ".msgpack", ".csv", ".nc", ".tiff", ".tif", ".geotif", ".geotif"}
+    extensions = {".json", ".msgpack", ".csv", ".nc", ".tiff", ".tif", ".geotif"}
     resource_type = "dataset"
 
     def __init__(self, client: IAsyncClient, all_dataset_types=None):
@@ -334,7 +332,7 @@ class DatasetUploadStrategy(UploadStrategy):
     async def get_all(self, parent_uuid: str):
         return await self.client.request(GetDatasets(project_uuid=parent_uuid))
 
-    def require_overwrite_question(self, existing: t.Optional[dict]):
+    def require_overwrite_question(self, existing: dict | None):
         if existing is None:
             return False
         return existing["has_data"]
@@ -345,7 +343,7 @@ class DatasetUploadStrategy(UploadStrategy):
         dataset_type = await self.infer_dataset_type(file, inspect=inspect)
         uuid = (
             await self.client.request(
-                CreateDataset(parent_uuid, name, type=dataset_type, display_name=name)
+                CreateDataset(parent_uuid, name, type=dataset_type, display_name=name),
             )
         )["dataset_uuid"]
         await self.upload_new_data(uuid, file)
@@ -379,9 +377,10 @@ class DatasetUploadStrategy(UploadStrategy):
                     pass
         if not self.all_dataset_types:
             echo(f"Could not determine dataset type for '{file.name}'")
-            return
+            return None
         return await prompt_choices_async(
-            f"\nPlease specify the type for dataset '{file.name}'", self.all_dataset_types
+            f"\nPlease specify the type for dataset '{file.name}'",
+            self.all_dataset_types,
         )
 
     async def upload_new_data(self, uuid, file):
@@ -434,7 +433,7 @@ class ViewUploadStrategy(UploadStrategy):
     def iter_files(self, directory: DataDir):
         if self.scenario is None:
             raise ValueError(
-                f"{type(self).__name__}.scenario is required to iterate over view-files"
+                f"{type(self).__name__}.scenario is required to iterate over view-files",
             )
         yield from directory.iter_views(self.scenario)
 
@@ -456,8 +455,15 @@ class ViewUploadStrategy(UploadStrategy):
 
 @contextlib.contextmanager
 def read_file_progress_bar(file: pathlib.Path):
-    with open(file, "rb") as fobj, tqdm(
-        total=file.stat().st_size, unit="B", unit_scale=True, unit_divisor=1024, desc=file.name
-    ) as t:
+    with (
+        open(file, "rb") as fobj,
+        tqdm(
+            total=file.stat().st_size,
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1024,
+            desc=file.name,
+        ) as t,
+    ):
         yield CallbackIOWrapper(t.update, fobj, "read")
         t.reset()

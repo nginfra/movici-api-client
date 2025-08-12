@@ -33,8 +33,8 @@ def config_file(tmp_path):
                 "version": 1,
                 "current_context": "a",
                 "contexts": [{"name": "a", "url": "https://example.com"}],
-            }
-        )
+            },
+        ),
     )
     return file
 
@@ -164,7 +164,7 @@ class TestConfig:
                 project="some_project",
                 username="some_user",
                 auth_token="abcdef",
-            )
+            ),
         )
         assert activated_config.as_dict() == {
             "version": 1,

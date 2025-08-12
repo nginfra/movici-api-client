@@ -50,7 +50,8 @@ def test_get_project(client):
 
 def test_create_project(client):
     assert requests.CreateProject(
-        name="some_project", display_name="Some Project"
+        name="some_project",
+        display_name="Some Project",
     ).generate_config(client) == {
         "method": "POST",
         "url": "/data-engine/v4/projects/",
@@ -60,7 +61,7 @@ def test_create_project(client):
 
 def test_update_project(client):
     assert requests.UpdateProject(uuid="0000-0000", display_name="Some Project").generate_config(
-        client
+        client,
     ) == {
         "method": "PUT",
         "url": "/data-engine/v4/projects/0000-0000/",

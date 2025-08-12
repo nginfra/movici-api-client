@@ -75,7 +75,7 @@ class DownloadResource(Task):
 
     def file_with_suffix(self, response):
         return self.file.with_suffix(
-            self.EXTENSIONS.get(response.headers.get("content-type"), ".dat")
+            self.EXTENSIONS.get(response.headers.get("content-type"), ".dat"),
         )
 
     @staticmethod
@@ -109,7 +109,7 @@ class RecursivelyDownloadResource(Task):
     def request_all(self):
         raise NotImplementedError
 
-    def create_subtasks(self, resources: t.List[dict]) -> t.Iterable[Task]:
+    def create_subtasks(self, resources: list[dict]) -> t.Iterable[Task]:
         raise NotImplementedError
 
 
@@ -117,7 +117,7 @@ class DownloadDatasets(RecursivelyDownloadResource):
     def request_all(self):
         return GetDatasets(self.parent["uuid"])
 
-    def create_subtasks(self, resources: t.List[dict]) -> t.Iterable[t.Iterable[Task]]:
+    def create_subtasks(self, resources: list[dict]) -> t.Iterable[t.Iterable[Task]]:
         yield from (
             DownloadResource(
                 file=self.directory.datasets.joinpath(ds["name"]),
@@ -134,7 +134,7 @@ class DownloadScenarios(RecursivelyDownloadResource):
     def request_all(self):
         return GetScenarios(self.parent["uuid"])
 
-    def create_subtasks(self, resources: t.List[dict]) -> t.Iterable[t.Iterable[Task]]:
+    def create_subtasks(self, resources: list[dict]) -> t.Iterable[t.Iterable[Task]]:
         yield ParallelTaskGroup(
             (DownloadSingleScenario(parent=r, directory=self.directory) for r in resources),
             progress=False,
@@ -146,7 +146,7 @@ class DownloadSingleScenario(RecursivelyDownloadResource):
     def request_all(self):
         return GetUpdates(self.parent["uuid"])
 
-    def create_subtasks(self, resources: t.List[dict]) -> t.Iterable[t.Iterable[Task]]:
+    def create_subtasks(self, resources: list[dict]) -> t.Iterable[t.Iterable[Task]]:
         name, uuid = self.parent["name"], self.parent["uuid"]
         yield DownloadResource(
             file=self.directory.scenarios.joinpath(name),
@@ -160,7 +160,7 @@ class DownloadSingleScenario(RecursivelyDownloadResource):
                 (
                     DownloadResource(
                         file=simulation_dir.joinpath(
-                            f"t{r['timestamp']}_{r['iteration']}_{r['name']}"
+                            f"t{r['timestamp']}_{r['iteration']}_{r['name']}",
                         ),
                         request=GetSingleUpdate(r["uuid"]),
                         progress=False,
@@ -186,7 +186,7 @@ class DownloadViews(Task):
         self.scenario = scenario
         self.directory = directory
 
-    async def run(self) -> t.Optional[bool]:
+    async def run(self) -> bool | None:
         async with self.client:
             views = await self.client.request(GetViews(self.scenario["uuid"]))
         directory = self.directory.ensure_views_dir(self.scenario["name"])
@@ -205,7 +205,7 @@ class DownloadProject(RecursivelyDownloadResource):
     def request_all(self):
         return GetProjects()
 
-    def create_subtasks(self, resources: t.List[dict]) -> t.Iterable[Task]:
+    def create_subtasks(self, resources: list[dict]) -> t.Iterable[Task]:
         yield DownloadDatasets(
             parent=self.parent,
             directory=self.directory,
@@ -236,7 +236,8 @@ class PrepareOverwriteDirectory(Task):
             return True
 
         overwrite = resolve_question_flag(
-            self.params.overwrite, f"Directory {self.directory!s} already existing, overwrite?"
+            self.params.overwrite,
+            f"Directory {self.directory!s} already existing, overwrite?",
         )
         if not overwrite:
             echo(f"Cowardly refusing to overwrite existing directory {self.directory!s}")
@@ -246,10 +247,11 @@ class PrepareOverwriteDirectory(Task):
         return True
 
 
-def prepare_overwrite_file(file: pathlib.Path, overwrite: t.Optional[bool] = None):
+def prepare_overwrite_file(file: pathlib.Path, overwrite: bool | None = None):
     if file.exists():
         overwrite = resolve_question_flag(
-            overwrite, f"File {file.name!s} already exists, overwrite?"
+            overwrite,
+            f"File {file.name!s} already exists, overwrite?",
         )
         if not file.is_file():
             raise InvalidFile(msg="not a file", file=file)

@@ -81,7 +81,12 @@ def test_login_reads_username_from_context(controller, prompt, context, client):
     ],
 )
 def test_login_with_different_username_situations(
-    user_in_context, ask_username, prompt_username, expected, controller, prompt
+    user_in_context,
+    ask_username,
+    prompt_username,
+    expected,
+    controller,
+    prompt,
 ):
     controller.context["username"] = user_in_context
     prompt.return_value = prompt_username

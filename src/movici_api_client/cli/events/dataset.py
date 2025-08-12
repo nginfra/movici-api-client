@@ -1,6 +1,5 @@
 import dataclasses
 import pathlib
-import typing as t
 
 from movici_api_client.cli.data_dir import DataDir
 
@@ -26,7 +25,7 @@ class GetSingleDataset(Event):
 class CreateDataset(Event):
     name: str
     display_name: str
-    type: t.Optional[str] = None
+    type: str | None = None
 
 
 @dataclasses.dataclass
@@ -34,7 +33,7 @@ class UpdateDataset(Event):
     name_or_uuid: str
     name: str
     display_name: str
-    type: t.Optional[str] = None
+    type: str | None = None
 
 
 @dataclasses.dataclass

@@ -1,7 +1,6 @@
 import dataclasses
 import io
 import pathlib
-import typing as t
 
 from .common import Request, Service, pick, simple_request, unwrap_envelope, urljoin
 
@@ -36,7 +35,7 @@ class Login(AuthRequest):
 class CheckAuthToken(AuthRequest):
     service = Service.AUTH
 
-    auth_token: t.Optional[str] = None
+    auth_token: str | None = None
 
     def make_request(self):
         req = {
@@ -107,7 +106,6 @@ class GetSingleProject(DataEngineRequest):
 
 @dataclasses.dataclass
 class CreateProject(DataEngineRequest):
-
     name: str
     display_name: str
 
@@ -167,7 +165,7 @@ class CreateDataset(DataEngineRequest):
     project_uuid: str
     name: str
     type: str
-    display_name: t.Optional[str] = None
+    display_name: str | None = None
 
     def make_request(self):
         return {
@@ -180,10 +178,10 @@ class CreateDataset(DataEngineRequest):
 @dataclasses.dataclass
 class UpdateDataset(DataEngineRequest):
     uuid: str
-    payload: t.Optional[dict] = None
-    name: t.Optional[str] = None
-    type: t.Optional[str] = None
-    display_name: t.Optional[str] = None
+    payload: dict | None = None
+    name: str | None = None
+    type: str | None = None
+    display_name: str | None = None
 
     def make_request(self):
         return {
@@ -221,7 +219,7 @@ class GetDatasetData(DataEngineRequest):
 @dataclasses.dataclass
 class AddDatasetData(DataEngineRequest):
     uuid: str
-    file: t.Union[str, pathlib.Path, io.BufferedIOBase]
+    file: str | pathlib.Path | io.BufferedIOBase
 
     def make_request(self):
         file = self.file

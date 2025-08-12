@@ -68,7 +68,7 @@ class MoviciDataDir(DataDir):
         return self.path == other.path
 
     @classmethod
-    def resolve_from_subpath(cls, path: t.Union[str, pathlib.Path]) -> t.Optional[pathlib.Path]:
+    def resolve_from_subpath(cls, path: str | pathlib.Path) -> pathlib.Path | None:
         path = pathlib.Path(path).resolve()
 
         for _ in range(100):
@@ -113,7 +113,7 @@ class MoviciDataDir(DataDir):
 
 
 class SimpleDataDirectory(DataDir):
-    extensions: t.Optional[t.Collection[str]] = None
+    extensions: t.Collection[str] | None = None
 
     def _iter_files(self):
         if not self.path.is_dir():
@@ -138,7 +138,7 @@ class SimpleDataDirectory(DataDir):
 
 
 class DatasetsDirectory(SimpleDataDirectory):
-    extensions = {".json", ".msgpack", ".csv", ".nc", ".tiff", ".tif", ".geotif", ".geotif"}
+    extensions = {".json", ".msgpack", ".csv", ".nc", ".tiff", ".tif", ".geotif"}
 
     @property
     def datasets(self):

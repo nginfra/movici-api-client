@@ -13,7 +13,7 @@ def read_json_file(file: pathlib.Path) -> dict:
         raise InvalidFile("not a file")
     try:
         return json.loads(file.read_text())
-    except IOError:
+    except OSError:
         raise InvalidFile("read error", file)
     except json.JSONDecodeError:
         raise InvalidFile("invalid json", file)
@@ -33,7 +33,7 @@ def edit_resource(resource: dict, editor=None, editor_env="EDITOR", default_edit
         except FileNotFoundError:
             raise InvalidEditor(EDITOR)
 
-        with open(file, "r") as f:
+        with open(file) as f:
             result = f.read()
 
     try:
@@ -54,7 +54,7 @@ def create_tempfile(suffix=None, prefix=None, dir=None, text=False):
     finally:
         try:
             os.remove(file)
-        except IOError:
+        except OSError:
             pass
 
 

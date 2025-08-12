@@ -1,11 +1,9 @@
-import typing as t
-
 from .common import Auth, BaseClient
 from .requests import Login
 
 
 class MoviciTokenAuth(Auth):
-    auth_token: t.Optional[str]
+    auth_token: str | None
 
     def __init__(self, auth_token):
         self.auth_token = auth_token

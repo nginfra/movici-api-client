@@ -60,34 +60,38 @@ def parse_service_urls(bases_dict=None, prefix=""):
 
 class ISyncClient:
     def request(
-        self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None
-    ) -> t.Optional[T]:
+        self,
+        req: BaseRequest[T],
+        on_error: ErrorCallback | None = None,
+    ) -> T | None:
         raise NotImplementedError
 
-    def stream(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
+    def stream(self, req: BaseRequest[T], on_error: ErrorCallback | None = None):
         raise NotImplementedError
 
 
 class IAsyncClient:
     async def request(
-        self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None
-    ) -> t.Optional[T]:
+        self,
+        req: BaseRequest[T],
+        on_error: ErrorCallback | None = None,
+    ) -> T | None:
         raise NotImplementedError
 
-    async def stream(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
+    async def stream(self, req: BaseRequest[T], on_error: ErrorCallback | None = None):
         raise NotImplementedError
 
 
 class BaseClient:
-    auth: t.Optional[Auth]
+    auth: Auth | None
 
     def __init__(
         self,
         base_url: str,
-        auth: t.Union[Auth, None, False] = None,
-        logger: t.Optional[logging.Logger] = None,
-        on_error: t.Optional[ErrorCallback] = None,
-        service_urls: t.Optional[t.Dict[Service, str]] = None,
+        auth: Auth | None | False = None,
+        logger: logging.Logger | None = None,
+        on_error: ErrorCallback | None = None,
+        service_urls: dict[Service, str] | None = None,
     ):
         self.base_url = base_url
         self.auth = auth
@@ -95,7 +99,7 @@ class BaseClient:
         self.on_error = on_error
         self.service_urls = service_urls if service_urls is not None else parse_service_urls()
 
-    def _handle_failure(self, resp: Response, on_error: t.Optional[ErrorCallback] = None):
+    def _handle_failure(self, resp: Response, on_error: ErrorCallback | None = None):
         if resp.status_code >= 400:
             run_global_error_callback = True
             if on_error:
@@ -110,21 +114,21 @@ class BaseClient:
             else:
                 resp.raise_for_status()
 
-    def resolve_service_url(self, service: t.Optional[Service]) -> str:
+    def resolve_service_url(self, service: Service | None) -> str:
         if service is None:
             service_url = ""
         else:
             try:
                 service_url = self.service_urls[service]
             except KeyError:
-                raise MoviciServiceUnavailable()
+                raise MoviciServiceUnavailable
         return urljoin(self.base_url, service_url)
 
     def _assert_auth(self, request: BaseRequest[T]):
         if request.auth:
             if self.auth is None:
                 raise ValueError(
-                    "request is authenticated, but no authenticationprovider configured"
+                    "request is authenticated, but no authenticationprovider configured",
                 )
 
     def _prepare_request_config(self, req: BaseRequest[T]):
@@ -155,7 +159,7 @@ class BaseRequest(t.Generic[T]):
 
 class Request(BaseRequest):
     auth = True
-    service: t.Optional[Service] = None
+    service: Service | None = None
 
     def generate_config(self, api: BaseClient):
         request = self.make_request()
@@ -192,7 +196,7 @@ def urljoin(*parts):
     return reduce(urljoin_, (str(part) + "/" for part in parts))
 
 
-def pick(obj, attrs: t.List[str], default=None):
+def pick(obj, attrs: list[str], default=None):
     # TODO: work with dictionaries as well as getattr
     def _get_item_or_attr(obj, key):
         try:

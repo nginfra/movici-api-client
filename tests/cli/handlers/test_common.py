@@ -16,7 +16,7 @@ async def test_gather_safe_awaits_coroutines():
 @pytest.mark.asyncio
 async def test_gather_safe_cancels_coroutines_on_error():
     async def raise_error():
-        raise ValueError()
+        raise ValueError
 
     cancelled = False
 

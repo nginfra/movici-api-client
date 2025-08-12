@@ -1,5 +1,4 @@
 import asyncio
-import typing as t
 
 from movici_api_client.api import requests as req
 from movici_api_client.api.client import AsyncClient
@@ -52,7 +51,7 @@ from ..helpers import edit_resource
 from ..utils import assert_current_context, confirm, echo, prompt_choices_async
 
 
-def requires_valid_project_uuid(cls: t.Type[EventHandler]):
+def requires_valid_project_uuid(cls: type[EventHandler]):
     original = cls.handle
 
     async def handle(self, event: Event, mediator: Mediator):
@@ -104,7 +103,7 @@ class RemoteCreateProjectHandler(RemoteEventHandler):
     async def handle(self, event: CreateProject, mediator: Mediator):
         result, *_ = await gather_safe(
             self.client.request(
-                req.CreateProject(name=event.name, display_name=event.display_name)
+                req.CreateProject(name=event.name, display_name=event.display_name),
             ),
             mediator.send(CreateScope(f"project:{event.name}")),
         )
@@ -120,7 +119,7 @@ class RemoteUpdateProjectHandler(RemoteEventHandler):
             if not event.display_name:
                 raise NoChangeDetected()
             return await self.client.request(
-                req.UpdateProject(uuid, display_name=event.display_name)
+                req.UpdateProject(uuid, display_name=event.display_name),
             )
 
 
@@ -133,7 +132,7 @@ class RemoteDeleteProjectHandler(RemoteEventHandler):
 
             confirm(
                 f"Are you sure you wish to delete project '{event.name_or_uuid}' "
-                "with all its associated data?"
+                "with all its associated data?",
             )
             result = await self.client.request(req.DeleteProject(project["uuid"]))
             try:
@@ -142,7 +141,8 @@ class RemoteDeleteProjectHandler(RemoteEventHandler):
                 pass
             else:
                 await self.client.request(
-                    req.DeleteScope(scope_uuid), on_error=lambda r: r.status_code != 404
+                    req.DeleteScope(scope_uuid),
+                    on_error=lambda r: r.status_code != 404,
                 )
 
             return result
@@ -169,7 +169,8 @@ class RemoteDownloadProjectHandler(RemoteEventHandler):
         self.params.with_simulation = True
         self.params.with_views = True
         return await ft.DownloadProject(
-            parent={"uuid": self.project_uuid}, directory=event.directory
+            parent={"uuid": self.project_uuid},
+            directory=event.directory,
         )
 
 
@@ -209,7 +210,8 @@ class RemoteCreateDatasetHandler(RemoteEventHandler):
             if event.type is None:
                 all_types = await mediator.send(GetDatasetTypes())
                 event.type = await prompt_choices_async(
-                    "Type", sorted([tp["name"] for tp in all_types])
+                    "Type",
+                    sorted([tp["name"] for tp in all_types]),
                 )
             return await self.client.request(
                 req.CreateDataset(
@@ -217,7 +219,7 @@ class RemoteCreateDatasetHandler(RemoteEventHandler):
                     name=event.name,
                     type=event.type,
                     display_name=event.display_name,
-                )
+                ),
             )
 
 
@@ -233,8 +235,11 @@ class RemoteUpdateDatasetHandler(RemoteEventHandler):
                 raise NoChangeDetected()
             return await self.client.request(
                 req.UpdateDataset(
-                    uuid, name=event.name, type=event.type, display_name=event.display_name
-                )
+                    uuid,
+                    name=event.name,
+                    type=event.type,
+                    display_name=event.display_name,
+                ),
             )
 
 
@@ -248,7 +253,7 @@ class RemoteDeleteDatasetHandler(RemoteEventHandler):
             uuid = await DatasetQuery(self.project_uuid).get_uuid(event.name_or_uuid)
 
             confirm(
-                f"Are you sure you wish to delete dataset '{event.name_or_uuid}' and all its data?"
+                f"Are you sure you wish to delete dataset '{event.name_or_uuid}' and all its data?",
             )
             return await self.client.request(req.DeleteDataset(uuid))
 
@@ -263,7 +268,7 @@ class RemoteClearDatasetHandler(RemoteEventHandler):
             uuid = await DatasetQuery(self.project_uuid).get_uuid(event.name_or_uuid)
 
             confirm(
-                f"Are you sure you wish to clear dataset '{event.name_or_uuid}' of all its data?"
+                f"Are you sure you wish to clear dataset '{event.name_or_uuid}' of all its data?",
             )
             return await self.client.request(req.DeleteDatasetData(uuid))
 
@@ -372,7 +377,7 @@ class RemoteDeleteScenarioHandler(RemoteEventHandler):
 
             confirm(
                 f"Are you sure you wish to delete scenario '{event.name_or_uuid}' "
-                "and all its data?"
+                "and all its data?",
             )
             return await self.client.request(req.DeleteScenario(uuid))
 
@@ -392,7 +397,7 @@ class RemoteClearScenarioHandler(RemoteEventHandler):
             if event.confirm:
                 confirm(
                     f"Are you sure you wish to clear scenario '{event.name_or_uuid}' "
-                    "of its simulation results?"
+                    "of its simulation results?",
                 )
 
             await asyncio.gather(
@@ -422,7 +427,7 @@ class RemoteRunSimulationHandler(RemoteEventHandler):
                 if not do_overwrite:
                     echo(
                         "Cowardly refusing to overwrite simulation results for "
-                        f"'{event.name_or_uuid}'"
+                        f"'{event.name_or_uuid}'",
                     )
                     return
                 await mediator.send(ClearScenario(event.name_or_uuid, confirm=False))
@@ -490,7 +495,9 @@ class RemoteDownloadMultipleScenariosHandler(RemoteEventHandler):
 
     async def handle(self, event: DownloadMultipleScenarios, mediator: Mediator):
         await ft.DownloadScenarios(
-            {"uuid": self.project_uuid}, directory=event.directory, progress=False
+            {"uuid": self.project_uuid},
+            directory=event.directory,
+            progress=False,
         )
 
 

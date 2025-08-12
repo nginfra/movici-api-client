@@ -53,8 +53,7 @@ class ConfigController(Controller):
         config = self.config
         if all:
             return config.contexts
-        else:
-            return assert_context(config)
+        return assert_context(config)
 
     @command
     @argument("key")
@@ -70,7 +69,6 @@ class ConfigController(Controller):
     @command
     @argument("keys", nargs=-1, required=True)
     def unset(self, keys):
-
         config = self.config
         context = assert_context(config)
 

@@ -46,7 +46,7 @@ class ViewController(Controller):
         fields=(
             "uuid",
             "name",
-        )
+        ),
     )
     def list(self, project_uuid, scenario_name_or_uuid):
         client = get(Client)
@@ -62,7 +62,7 @@ class ViewController(Controller):
         fields=(
             "uuid",
             "name",
-        )
+        ),
     )
     def get(self, project_uuid, scenario_name_or_uuid, view_name_or_uuid, output):
         result = get_view(project_uuid, scenario_name_or_uuid, view_name_or_uuid)
@@ -75,7 +75,12 @@ class ViewController(Controller):
     @argument("view_name_or_uuid")
     @format_output
     def create(
-        self, project_uuid, scenario_name_or_uuid, view_name_or_uuid, display_name, dataset_type
+        self,
+        project_uuid,
+        scenario_name_or_uuid,
+        view_name_or_uuid,
+        display_name,
+        dataset_type,
     ):
         raise NotYetImplemented()
 
@@ -127,7 +132,7 @@ class ViewController(Controller):
                 overwrite=maybe_set_flag(overwrite, yes, no),
                 create_new=maybe_set_flag(create, yes, no),
                 inspect_file=True,
-            ).run()
+            ).run(),
         )
 
         echo("Success!")
@@ -143,7 +148,14 @@ class ViewController(Controller):
     )
     @upload_options
     def upload_multiple(
-        self, project_uuid, scenario_name_or_uuid, directory, overwrite, create, yes, no
+        self,
+        project_uuid,
+        scenario_name_or_uuid,
+        directory,
+        overwrite,
+        create,
+        yes,
+        no,
     ):
         if yes and no:
             raise InvalidUsage("cannot combine --force with --never")
@@ -160,7 +172,7 @@ class ViewController(Controller):
                 overwrite=maybe_set_flag(overwrite, yes, no),
                 create_new=maybe_set_flag(create, yes, no),
                 inspect_file=True,
-            ).run()
+            ).run(),
         )
         echo("Success!")
 
@@ -182,7 +194,9 @@ class ViewController(Controller):
         client = get(Client)
 
         scenario = get_scenario(
-            name_or_uuid=scenario_name_or_uuid, project_uuid=project_uuid, client=client
+            name_or_uuid=scenario_name_or_uuid,
+            project_uuid=project_uuid,
+            client=client,
         )
         view = get_view(project_uuid, scenario_name_or_uuid, view_name_or_uuid, client=client)
 
@@ -190,7 +204,8 @@ class ViewController(Controller):
         file = views_dir.joinpath(view["name"]).with_suffix(".json")
 
         if not prepare_overwrite_file(
-            file, overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite)
+            file,
+            overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite),
         ):
             return
         file.write_text(json.dumps(view, indent=2))
@@ -200,7 +215,12 @@ class ViewController(Controller):
     @argument("scenario_name_or_uuid")
     @download_options(purpose="views")
     def download_multiple(
-        self, project_uuid, scenario_name_or_uuid, directory, overwrite, no_overwrite
+        self,
+        project_uuid,
+        scenario_name_or_uuid,
+        directory,
+        overwrite,
+        no_overwrite,
     ):
         client = get(Client)
 
@@ -213,7 +233,7 @@ class ViewController(Controller):
                 scenario,
                 directory=directory,
                 overwrite=maybe_set_flag(False, default_yes=overwrite, default_no=no_overwrite),
-            ).run()
+            ).run(),
         )
         echo("Success!")
 

@@ -29,7 +29,7 @@ def get_config(file: pathlib.Path = None):
 
         return Config.from_dict(read_json_file(file))
 
-    except IOError:
+    except OSError:
         raise InvalidConfigFile("read error", file)
     except InvalidFile as e:
         raise InvalidConfigFile(e.msg, e.file)
@@ -49,7 +49,7 @@ def read_config(file: pathlib.Path) -> Config:
     return Config.from_dict(json.loads(file.read_text()))
 
 
-def write_config(config: Config = None, file: t.Optional[pathlib.Path] = None):
+def write_config(config: Config = None, file: pathlib.Path | None = None):
     config = config or gimme.that(Config)
     file = pathlib.Path(file) if file is not None else get_config_path()
     file.write_text(json.dumps(config.as_dict(), indent=2))
@@ -59,7 +59,10 @@ class Config:
     """An in memory representation of the config file"""
 
     def __init__(
-        self, contexts: t.Sequence[Context], current_context: t.Optional[str] = None, version=1
+        self,
+        contexts: t.Sequence[Context],
+        current_context: str | None = None,
+        version=1,
     ) -> None:
         self.version = version
         self.contexts = list(contexts)
@@ -71,7 +74,7 @@ class Config:
             raise ValueError(f"Invalid config name {name}")
         self.current_context = context
 
-    def get_context(self, name) -> t.Optional[Context]:
+    def get_context(self, name) -> Context | None:
         for context in self.contexts:
             if context.name == name:
                 return context
@@ -81,7 +84,7 @@ class Config:
             raise DuplicateContext({context.name})
         self.contexts.append(context)
 
-    def remove_context(self, item: t.Union[str, Context]):
+    def remove_context(self, item: str | Context):
         try:
             if isinstance(item, str):
                 name = item
@@ -136,7 +139,7 @@ _MISSING = object()
 
 @dataclasses.dataclass
 class SpecialKey:
-    parse: t.Optional[callable] = None
+    parse: callable | None = None
     default: t.Any = _MISSING
     required: bool = False
 

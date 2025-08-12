@@ -8,15 +8,7 @@ from asyncio import Semaphore
 import httpx
 from httpx import HTTPError, HTTPStatusError, Response, Timeout  # noqa
 
-from .common import (
-    Auth,
-    BaseClient,
-    BaseRequest,
-    ErrorCallback,
-    IAsyncClient,
-    ISyncClient,
-    Service,
-)
+from .common import Auth, BaseClient, BaseRequest, ErrorCallback, IAsyncClient, ISyncClient, Service
 
 T = t.TypeVar("T")
 
@@ -27,19 +19,21 @@ class Client(BaseClient, ISyncClient):
     def __init__(
         self,
         base_url: str,
-        auth: t.Union[Auth, None, False] = None,
-        client: t.Optional[httpx.Client] = None,
-        logger: t.Optional[logging.Logger] = None,
-        on_error: t.Optional[ErrorCallback] = None,
-        service_urls: t.Optional[t.Dict[Service, str]] = None,
+        auth: Auth | None | False = None,
+        client: httpx.Client | None = None,
+        logger: logging.Logger | None = None,
+        on_error: ErrorCallback | None = None,
+        service_urls: dict[Service, str] | None = None,
     ):
         super().__init__(base_url, auth, logger, on_error, service_urls)
         self.client = client or httpx.Client(timeout=DEFAULT_TIMEOUT_CONFIG)
         self.timeout = self.client.timeout
 
     def request(
-        self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None
-    ) -> t.Optional[T]:
+        self,
+        req: BaseRequest[T],
+        on_error: ErrorCallback | None = None,
+    ) -> T | None:
         self._assert_auth(req)
         conf = self._prepare_request_config(req)
         resp = self.client.request(**conf)
@@ -47,7 +41,7 @@ class Client(BaseClient, ISyncClient):
         return req.make_response(resp)
 
     @contextlib.contextmanager
-    def stream(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
+    def stream(self, req: BaseRequest[T], on_error: ErrorCallback | None = None):
         conf = self._prepare_request_config(req)
         with self.client.stream(**conf) as resp:
             self._handle_failure(resp, on_error)
@@ -55,16 +49,16 @@ class Client(BaseClient, ISyncClient):
 
 
 class AsyncClient(BaseClient, IAsyncClient):
-    client: t.Optional[httpx.AsyncClient]
+    client: httpx.AsyncClient | None
 
     def __init__(
         self,
         base_url: str,
-        auth: t.Union[Auth, None, False] = None,
-        client_factory: t.Type[httpx.AsyncClient] = httpx.AsyncClient,
-        logger: t.Optional[logging.Logger] = None,
-        on_error: t.Optional[ErrorCallback] = None,
-        service_urls: t.Optional[t.Dict[Service, str]] = None,
+        auth: Auth | None | False = None,
+        client_factory: type[httpx.AsyncClient] = httpx.AsyncClient,
+        logger: logging.Logger | None = None,
+        on_error: ErrorCallback | None = None,
+        service_urls: dict[Service, str] | None = None,
         max_concurrent=10,
         timeout=DEFAULT_TIMEOUT_CONFIG,
     ):
@@ -75,7 +69,7 @@ class AsyncClient(BaseClient, IAsyncClient):
         self.enter_count = 0
         self.timeout = timeout
 
-    async def request(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
+    async def request(self, req: BaseRequest[T], on_error: ErrorCallback | None = None):
         async with self.concurrent_requests:
             self._ensure_client()
             self._assert_auth(req)
@@ -86,7 +80,7 @@ class AsyncClient(BaseClient, IAsyncClient):
             return req.make_response(resp)
 
     @contextlib.asynccontextmanager
-    async def stream(self, req: BaseRequest[T], on_error: t.Optional[ErrorCallback] = None):
+    async def stream(self, req: BaseRequest[T], on_error: ErrorCallback | None = None):
         async with self.concurrent_requests:
             self._ensure_client()
             conf = self._prepare_request_config(req)

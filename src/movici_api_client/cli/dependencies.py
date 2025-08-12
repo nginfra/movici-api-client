@@ -8,7 +8,7 @@ _repository = {}
 _fixed_types = set()
 
 
-def get(tp: t.Type[T]) -> T:
+def get(tp: type[T]) -> T:
     return gimme.that(tp)
 
 
