@@ -1,6 +1,9 @@
 unittest:
 	poetry run pytest -v tests/
 
+test-cov:
+	poetry run pytest --cov=movici_api_client --cov-report=term-missing tests/
+
 flake8:
 	poetry run flake8 src/ tests/
 
@@ -13,9 +16,12 @@ isort:
 isort-check:
 	poetry run isort -c .
 
-lint: flake8 black-check isort-check
+mypy:
+	poetry run mypy src/
+
+lint: flake8 black-check isort-check mypy
 	
-test-all: lint unittest
+test-all: lint test-cov
 
 level=patch
 export level
