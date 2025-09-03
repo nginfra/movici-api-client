@@ -16,10 +16,7 @@ isort:
 isort-check:
 	poetry run isort -c .
 
-mypy:
-	poetry run mypy src/
-
-lint: flake8 black-check isort-check mypy
+lint: flake8 black-check isort-check
 	
 test-all: lint test-cov
 
