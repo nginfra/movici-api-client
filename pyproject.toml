@@ -16,6 +16,7 @@ name = "movici-api-client"
 version = "0.1.0"
 description = "Client library and CLI tool for interfacing with the Movici Cloud Platform"
 authors = ["Pelle Koster <pelle.koster@nginfra.nl>"]
+maintainers = ["NGinfra - Movici <movici@nginfra.nl>"]
 license = "Movici Public License"
 readme = "README.rst"
 packages = [{ include = "movici_api_client", from = "src" }]
@@ -40,9 +41,11 @@ pre-commit = ">=3.0.0"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+minversion = "7.0"
 addopts = [
     "--tb=short",
     "--strict-markers",
+    "--strict-config",
 ]
 testpaths = ["tests"]
 asyncio_mode = "auto"
