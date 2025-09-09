@@ -4,24 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 99
-include = '\.pyi?$'
-exclude = '''(
-/(
-  | \.direnv
-  | \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-
-)/
-)
-'''
+target-version = ["py38", "py39", "py310", "py311"]
 
 [tool.isort]
 profile = "black"
@@ -33,6 +16,7 @@ name = "movici-api-client"
 version = "0.1.0"
 description = "Client library and CLI tool for interfacing with the Movici Cloud Platform"
 authors = ["Pelle Koster <pelle.koster@nginfra.nl>"]
+maintainers = ["NGinfra - Movici <movici@nginfra.nl>"]
 license = "Movici Public License"
 readme = "README.rst"
 packages = [{ include = "movici_api_client", from = "src" }]
@@ -47,14 +31,40 @@ tqdm = "^4.64.1"
 gimme-that = "^0.3.1"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.2.0"
-flake8 = "^6.0.0"
-black = "^22.12.0"
-isort = "^5.11.2"
-pytest-asyncio = "^0.20.3"
+pytest = ">=7.2.0"
+pytest-asyncio = ">=0.20.3"
+pytest-cov = ">=4.0.0"
+flake8 = ">=6.0.0"
+black = ">=22.12.0"
+isort = ">=5.11.2"
+pre-commit = ">=3.0.0"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+minversion = "7.0"
+addopts = [
+    "--tb=short",
+    "--strict-markers",
+    "--strict-config",
+]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+
+[tool.coverage.run]
+source = ["src/movici_api_client"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "pass",
+    "except ImportError:",
+]
 
 [tool.poetry.scripts]
 movici = 'movici_api_client.cli:__main__'

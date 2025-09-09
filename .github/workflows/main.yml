@@ -29,9 +29,13 @@ jobs:
           pip install poetry
           poetry install
 
-      - name: Run tests
+      - name: Run linting
         run: |
-          make unittest
+          make lint
+
+      - name: Run tests with coverage
+        run: |
+          make test-cov
 
   deploy:
     # We only want to run the deploy job if we've just created a version tag. in `on.push.tags`
