@@ -8,8 +8,6 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 5
-    assignees:
-      - "nginfra/movici-team"
     labels:
       - "dependencies"
       - "python"
@@ -26,6 +24,15 @@ updates:
           - "mypy*"
           - "pre-commit*"
           - "coverage*"
+      production:
+        exclude-patterns:
+          - "pytest*"
+          - "black*"
+          - "flake8*"
+          - "isort*"
+          - "mypy*"
+          - "pre-commit*"
+          - "coverage*"
 
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
@@ -35,8 +42,6 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 3
-    assignees:
-      - "nginfra/movici-team"
     labels:
       - "dependencies"
       - "github-actions"
