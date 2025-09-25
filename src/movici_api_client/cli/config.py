@@ -98,9 +98,9 @@ class Config:
     def as_dict(self):
         return {
             "version": self.version,
-            "current_context": self.current_context.name
-            if self.current_context is not None
-            else None,
+            "current_context": (
+                self.current_context.name if self.current_context is not None else None
+            ),
             "contexts": [context.as_dict() for context in self.contexts],
         }
 
