@@ -7,20 +7,27 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 5
-    reviewers:
-      - "movici-team"
-    assignees:
-      - "movici-team"
     labels:
       - "dependencies"
       - "python"
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "chore"
       include: "scope"
     groups:
       development:
         patterns:
+          - "pytest*"
+          - "black*"
+          - "flake8*"
+          - "isort*"
+          - "mypy*"
+          - "pre-commit*"
+          - "coverage*"
+      production:
+        exclude-patterns:
           - "pytest*"
           - "black*"
           - "flake8*"
@@ -37,13 +44,9 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 3
-    reviewers:
-      - "movici-team"
-    assignees:
-      - "movici-team"
     labels:
       - "dependencies"
       - "github-actions"
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "chore"
       include: "scope"
