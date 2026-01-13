@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pathlib
 import re
 import typing as t
@@ -8,33 +10,23 @@ MOVICI_DATADIR_SENTINEL = ".movici_data"
 
 
 class DataDir:
-    datasets: pathlib.Path = None
-    scenarios: pathlib.Path = None
-    views: pathlib.Path = None
-
     def __init__(self, path: pathlib.Path) -> None:
         self.path = path
 
-    def iter_datasets(self) -> t.Iterable[pathlib.Path]:
+    def datasets(self) -> DatasetsDirectory:
         raise NotImplementedError
 
-    def iter_scenarios(self) -> t.Iterable[pathlib.Path]:
+    def scenarios(self) -> ScenariosDirectory:
         raise NotImplementedError
 
-    def iter_updates(self, scenario: str) -> t.Iterable[pathlib.Path]:
+    def updates(self, scenario="") -> UpdatesDirectory:
         raise NotImplementedError
 
-    def iter_views(self, scenario: str) -> t.Iterable[pathlib.Path]:
+    def views(self, scenario="") -> ViewsDirectory:
         raise NotImplementedError
 
-    def ensure_views_dir(self, scenario: str) -> pathlib.Path:
-        raise NotImplementedError
-
-    def ensure_simulation_dir(self, scenario: str) -> pathlib.Path:
-        raise NotImplementedError
-
-    @staticmethod
-    def _ensure_directory(path: pathlib.Path):
+    def ensure_directory(self):
+        path = self.path
         if not path.exists():
             path.mkdir(exist_ok=True, parents=True)
         if not path.is_dir():
@@ -46,17 +38,17 @@ class MoviciDataDir(DataDir):
     def __init__(self, path: pathlib.Path) -> None:
         self.path = path
 
-    @property
     def datasets(self):
-        return self.path.joinpath("init_data")
+        return DatasetsDirectory(self.path.joinpath("init_data"))
 
-    @property
     def scenarios(self):
-        return self.path.joinpath("scenarios")
+        return ScenariosDirectory(self.path.joinpath("scenarios"))
 
-    @property
-    def views(self):
-        return self.path.joinpath("views")
+    def views(self, scenario=""):
+        return ViewsDirectory(self.path.joinpath("views").joinpath(scenario))
+
+    def updates(self, scenario=""):
+        return UpdatesDirectory(self.scenarios().path.joinpath(scenario))
 
     @property
     def _sentinel(self):
@@ -83,39 +75,21 @@ class MoviciDataDir(DataDir):
     def initialize(self):
         if not self.path.exists():
             self.path.mkdir(parents=True, exist_ok=True)
-        self.create_tree(exists_ok=True)
+        self.create_tree()
 
-    def create_tree(self, exists_ok: bool = False):
+    def create_tree(self):
         if not self.path.is_dir():
             raise InvalidDirectory("not a directory", self.path)
         self._sentinel.touch()
-        self.datasets.mkdir(exist_ok=exists_ok)
-        self.scenarios.mkdir(exist_ok=exists_ok)
-        self.views.mkdir(exist_ok=exists_ok)
-
-    def iter_datasets(self):
-        yield from DatasetsDirectory(self.datasets).iter_datasets()
-
-    def iter_scenarios(self):
-        yield from ScenariosDirectory(self.scenarios).iter_scenarios()
-
-    def iter_updates(self, scenario: str):
-        yield from UpdatesDirectory(self.scenarios.joinpath(scenario)).iter_updates()
-
-    def iter_views(self, scenario: str):
-        yield from ViewsDirectory(self.views.joinpath(scenario)).iter_views()
-
-    def ensure_views_dir(self, scenario: str):
-        return self._ensure_directory(self.views.joinpath(scenario))
-
-    def ensure_simulation_dir(self, scenario: str):
-        return self._ensure_directory(self.scenarios.joinpath(scenario))
+        self.datasets().ensure_directory()
+        self.scenarios().ensure_directory()
+        self.views().ensure_directory()
 
 
 class SimpleDataDirectory(DataDir):
     extensions: t.Optional[t.Collection[str]] = None
 
-    def _iter_files(self):
+    def iter_files(self):
         if not self.path.is_dir():
             return
         for candidate in self.path.iterdir():
@@ -124,66 +98,49 @@ class SimpleDataDirectory(DataDir):
             if self.extensions is None or candidate.suffix in self.extensions:
                 yield candidate
 
-    def iter_datasets(self):
-        yield from ()
+    def get_file_path_if_exists(self, name, suffix=None):
+        extensions = self.extensions if suffix is None else [suffix]
+        for ext in extensions:
+            path = self.path.joinpath(name).with_suffix(ext)
+            if path.is_file():
+                return path
 
-    def iter_scenarios(self):
-        yield from ()
-
-    def iter_updates(self, scenario: str):
-        yield from ()
-
-    def iter_views(self, scenario: str):
-        yield from ()
+    def get_file_path(self, name):
+        return self.path.joinpath(name)
 
 
 class DatasetsDirectory(SimpleDataDirectory):
     extensions = {".json", ".msgpack", ".csv", ".nc", ".tiff", ".tif", ".geotif", ".geotif"}
 
-    @property
-    def datasets(self):
-        return self.path
-
-    def iter_datasets(self):
-        yield from self._iter_files()
+    def updates(self):
+        return self
 
 
 class ScenariosDirectory(SimpleDataDirectory):
     extensions = {".json"}
 
-    @property
     def scenarios(self):
-        return self.path
+        return self
 
-    def iter_scenarios(self):
-        yield from self._iter_files()
-
-    def iter_updates(self, scenario: str):
-        path = self.path.joinpath(scenario)
-        yield from UpdatesDirectory(path).iter_updates()
-
-    def ensure_simulation_dir(self, scenario: str):
-        return self._ensure_directory(self.scenarios.joinpath(scenario))
+    def updates(self, scenario="") -> UpdatesDirectory:
+        return UpdatesDirectory(self.path.joinpath(scenario))
 
 
 class UpdatesDirectory(SimpleDataDirectory):
     extensions = {".json"}
 
-    def iter_updates(self, scenario: str = None):
+    def updates(self, scenario=""):
+        return self
+
+    def iter_files(self, scenario: str = None):
         pattern = re.compile(r"t(?P<timestamp>\d+)_(?P<iteration>\d+)_(?P<dataset>\w+)")
-        for file in self._iter_files():
+        for file in super().iter_files():
             if pattern.match(file.stem):
                 yield file
-
-    def ensure_simulation_dir(self, scenario: str):
-        return self._ensure_directory(self.path)
 
 
 class ViewsDirectory(SimpleDataDirectory):
     extensions = {".json"}
 
-    def iter_views(self, scenario: str = None):
-        yield from self._iter_files()
-
-    def ensure_views_dir(self, scenario: str):
-        return self._ensure_directory()
+    def views(self, scenario=""):
+        return self

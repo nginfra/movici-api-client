@@ -120,7 +120,7 @@ class DownloadDatasets(RecursivelyDownloadResource):
     def create_subtasks(self, resources: t.List[dict]) -> t.Iterable[t.Iterable[Task]]:
         yield from (
             DownloadResource(
-                file=self.directory.datasets.joinpath(ds["name"]),
+                file=self.directory.datasets().path.joinpath(ds["name"]),
                 request=GetDatasetData(ds["uuid"]),
                 progress=self.progress,
                 continue_after_failed_overwrite=True,
@@ -154,7 +154,7 @@ class DownloadSingleScenario(RecursivelyDownloadResource):
             progress=False,
         )
         if self.params.with_simulation:
-            simulation_dir = self.directory.ensure_simulation_dir(name)
+            simulation_dir = self.directory.updates(name).ensure_directory()
             yield PrepareOverwriteDirectory(simulation_dir)
             yield ParallelTaskGroup(
                 (
@@ -189,7 +189,7 @@ class DownloadViews(Task):
     async def run(self) -> t.Optional[bool]:
         async with self.client:
             views = await self.client.request(GetViews(self.scenario["uuid"]))
-        directory = self.directory.ensure_views_dir(self.scenario["name"])
+        directory = self.directory.views(self.scenario["name"]).ensure_directory()
         for view in views:
             self.store_view(view, directory=directory)
 

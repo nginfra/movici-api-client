@@ -17,6 +17,7 @@ from .upload import (
     UploadResource,
     UploadScenario,
     UploadStrategy,
+    ViewUploadStrategy,
 )
 
 __all__ = [
@@ -36,5 +37,6 @@ __all__ = [
     "UploadResource",
     "UploadScenario",
     "UploadStrategy",
+    "ViewUploadStrategy",
     "resolve_question_flag",
 ]

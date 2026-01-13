@@ -33,7 +33,7 @@ def config_path(tmp_path):
                 "contexts": [
                     {
                         "name": "test_context",
-                        "url": "https://example.org",
+                        "location": "https://example.org",
                     }
                 ],
             }

@@ -33,6 +33,7 @@ class DatasetController(Controller):
     decorators = (authenticated,)
 
     @command(name="datasets", group="get")
+    @cli_options("inspect")
     @format_output(
         fields=(
             "uuid",

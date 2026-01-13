@@ -32,7 +32,7 @@ def config_file(tmp_path):
             {
                 "version": 1,
                 "current_context": "a",
-                "contexts": [{"name": "a", "url": "https://example.com"}],
+                "contexts": [{"name": "a", "location": "https://example.org"}],
             }
         )
     )
@@ -103,7 +103,7 @@ class TestConfig:
 
     @pytest.fixture
     def config(self):
-        return Config(contexts=[Context(name="my-context", url="https://example.org")])
+        return Config(contexts=[Context(name="my-context", location="https://example.org")])
 
     @pytest.fixture
     def activated_config(self, config):
@@ -120,7 +120,7 @@ class TestConfig:
         assert activated_config.as_dict()["current_context"] == "my-context"
 
     def test_get_config(self, config):
-        assert config.get_context("my-context").url == "https://example.org"
+        assert config.get_context("my-context").location == "https://example.org"
 
     def test_add_context(self, config):
         config.add_context(Context("new-context", "https://some.url"))
@@ -129,30 +129,30 @@ class TestConfig:
     def test_activate_new_context(self, config):
         config.add_context(Context("new-context", "https://some.url"))
         config.activate_context("new-context")
-        assert config.current_context.url == "https://some.url"
+        assert config.current_context.location == "https://some.url"
 
-    def test_remove_context_by_object(self, config):
+    def test_delete_context_by_object(self, config):
         context = config.contexts[0]
-        config.remove_context(context)
+        config.delete_context(context)
         assert context not in config.contexts
 
-    def test_remove_context_by_name(self, config):
+    def test_delete_context_by_name(self, config):
         context = config.contexts[0]
-        config.remove_context(context.name)
+        config.delete_context(context.name)
         assert context not in config.contexts
 
     def test_remove_active_context_deactivates(self, activated_config):
         context = activated_config.contexts[0]
-        activated_config.remove_context(context)
+        activated_config.delete_context(context)
         assert activated_config.current_context is None
 
     def test_remove_nonexisting_context(self, config):
-        config.remove_context("invalid")
+        config.delete_context("invalid")
         assert len(config.contexts) == 1
 
     def test_cannot_activate_removed_context(self, config):
         context = config.contexts[0]
-        config.remove_context(context)
+        config.delete_context(context)
         with pytest.raises(ValueError):
             config.activate_context(context.name)
 
@@ -172,11 +172,11 @@ class TestConfig:
             "contexts": [
                 {
                     "name": "my-context",
-                    "url": "https://example.org",
+                    "location": "https://example.org",
                 },
                 {
                     "name": "some-context",
-                    "url": "https://some.url",
+                    "location": "https://some.url",
                     "project": "some_project",
                     "username": "some_user",
                     "auth_token": "abcdef",
@@ -193,7 +193,7 @@ def test_serialize_and_deserialize_config(tmp_path):
     file = tmp_path.joinpath(".conf")
     context = Context(
         name="a",
-        url="https://example.org",
+        location="https://example.org",
         project="project",
         username="username",
         auth_token="auth_token",
@@ -215,3 +215,12 @@ class TestContext:
 
     def test_default_value(self, context):
         assert context["auth"] is True
+
+    def test_delete_special_key_with_default(self, context):
+        context.auth = False
+        del context.auth
+        assert context.auth
+
+    def test_cannot_delete_required_special_key(self, context):
+        with pytest.raises(ValueError):
+            del context.location

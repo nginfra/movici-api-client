@@ -21,7 +21,6 @@ def read_json_file(file: pathlib.Path) -> dict:
 
 def edit_resource(resource: dict, editor=None, editor_env="EDITOR", default_editor="vim"):
     EDITOR = editor or os.environ.get(editor_env, default_editor)
-
     initial_message = json.dumps(resource, indent=2)
 
     with create_tempfile(suffix=".tmp") as file:
