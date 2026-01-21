@@ -1,3 +1,4 @@
+import os
 import pathlib
 import re
 import typing as t
@@ -43,8 +44,8 @@ class DataDir:
 
 
 class MoviciDataDir(DataDir):
-    def __init__(self, path: pathlib.Path) -> None:
-        self.path = path
+    def __init__(self, path: str | os.PathLike) -> None:
+        self.path = pathlib.Path(path)
 
     @property
     def datasets(self):
