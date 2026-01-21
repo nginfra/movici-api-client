@@ -356,7 +356,7 @@ class RemoteDownloadAttributeSchemaHanlder(RemoteEventHandler):
         if file.exists() and not self.params.overwrite:
             do_overwrite = resolve_question_flag(
                 self.params.overwrite,
-                "directory already has an attribute schema file, do you wish to overwrite?"
+                "directory already has an attribute schema file, do you wish to overwrite?",
             )
             if not do_overwrite:
                 echo("Cowardly refusing to overwrite attribute schema")
