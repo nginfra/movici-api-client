@@ -6,14 +6,14 @@ from movici_api_client.cli.config import read_config
 from movici_api_client.cli.controllers.config import ConfigController
 from movici_api_client.cli.controllers.datasets import DatasetController
 from movici_api_client.cli.controllers.projects import ProjectController
-from movici_api_client.cli.main import login, main
+from movici_api_client.cli.main import login, main, initialize_data_dir
 
 
 @pytest.fixture
 def cli():
     return cli_factory(
         main=main,
-        commands=[login],
+        commands=[login, initialize_data_dir],
         controller_types=[ProjectController, ConfigController, DatasetController],
     )
 
@@ -31,3 +31,11 @@ def test_login_saves_context(cli, client, config_path):
     config = read_config(config_path)
     assert config.current_context["auth_token"] == "some_auth_token"
     assert config.current_context["username"] == "user"
+
+
+def test_initialize_data_dir(cli, client, tmp_path_factory):
+    tmp_path = tmp_path_factory.mktemp("data_dir")
+    runner = click.testing.CliRunner()
+    result = runner.invoke(cli, ["initialize-data-dir", str(tmp_path)], catch_exceptions=False)
+    assert result.exit_code == 0
+    assert (tmp_path / ".movici_data").exists()
