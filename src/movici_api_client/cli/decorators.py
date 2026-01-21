@@ -163,7 +163,7 @@ def upload_options(func):
 
 
 def download_options(
-    purpose: t.Literal["datasets", "scenarios", "updates", "views"],
+    purpose: t.Literal["datasets", "scenarios", "updates", "views", "project"],
 ):
     def decorator(func):
         return combine_decorators(
@@ -187,7 +187,7 @@ def data_directory_option(purpose):
     )
 
 
-def combine_decorators(decorators: t.Iterable[callable]):
+def combine_decorators(decorators: t.Iterable[t.Callable]):
     def decorator(func):
         return functools.reduce(
             lambda f, decorator: decorator(f),
