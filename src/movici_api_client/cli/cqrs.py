@@ -8,10 +8,12 @@ import gimme
 class Event:
     pass
 
+
 T = t.TypeVar("T", bound=Event)
 
+
 class EventHandler(t.Generic[T]):
-    __event__: type[T]  = None
+    __event__: type[T] = None
     __result_type__: t.Optional[t.Type] = None
 
     async def handle(self, event: T, mediator: Mediator):
