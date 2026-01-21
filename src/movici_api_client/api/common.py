@@ -175,7 +175,7 @@ def simple_request(func):
 
 
 def unwrap_envelope(envelope):
-    def decorator(cls: Request):
+    def decorator(cls: type[Request]):
         original = cls.make_response
 
         def make_response(self, resp: Response):
@@ -192,7 +192,7 @@ def urljoin(*parts):
     return reduce(urljoin_, (str(part) + "/" for part in parts))
 
 
-def pick(obj, attrs: t.List[str], default=None):
+def pick(obj, attrs: t.Sequence[str], default=None):
     # TODO: work with dictionaries as well as getattr
     def _get_item_or_attr(obj, key):
         try:

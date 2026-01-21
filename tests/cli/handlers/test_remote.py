@@ -53,6 +53,7 @@ from movici_api_client.cli.handlers.remote import (
     RemoteCreateProjectHandler,
     RemoteDeleteProjectHandler,
     RemoteDownloadProjectHandler,
+    RemoteGetAttributeSchemaHandler,
     RemoteGetAllProjectsHandler,
     RemoteGetSingleProjectHandler,
     RemoteRunSimulationHandler,
@@ -457,3 +458,21 @@ async def test_remote_download_multiple_scenarios_handler(mediator, data_dir, va
     assert mock.await_args == call(
         {"uuid": valid_project_uuid}, directory=data_dir, progress=False
     )
+
+
+@pytest.mark.parametrize(
+    "datatype,unit_type, unit_shape, csr",
+    [
+        ("DOUBLE", "DOUBLE", [], False),
+        ("FLOAT", "DOUBLE", [], False),
+        ("LIST<FLOAT>", "DOUBLE", [], True),
+        ("TUPLE<DOUBLE,DOUBLE,DOUBLE>", "DOUBLE", [3], False),
+        ("LIST<TUPLE<DOUBLE,DOUBLE,DOUBLE>>", "DOUBLE", [3], True),
+    ],
+)
+def test_parse_attribute_schema_datatype(datatype, unit_type, unit_shape, csr):
+    assert RemoteGetAttributeSchemaHandler.parse_datatype(datatype) == {
+        "csr": csr,
+        "unit_shape": unit_shape,
+        "data_type": unit_type,
+    }

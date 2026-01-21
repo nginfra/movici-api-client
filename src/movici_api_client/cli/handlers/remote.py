@@ -1,4 +1,5 @@
 import asyncio
+import json
 import typing as t
 
 from movici_api_client.api import requests as req
@@ -12,10 +13,12 @@ from ..events.dataset import (
     ClearDataset,
     CreateDataset,
     DeleteDataset,
+    DownloadAttributeSchema,
     DownloadDataset,
     DownloadMultipleDatasets,
     EditDataset,
     GetAllDatasets,
+    GetAttributeSchema,
     GetDatasetTypes,
     GetSingleDataset,
     UpdateDataset,
@@ -44,7 +47,13 @@ from ..events.scenario import (
     UploadMultipleScenarios,
     UploadScenario,
 )
-from ..exceptions import InvalidActiveProject, InvalidResource, NoActiveProject, NoChangeDetected
+from ..exceptions import (
+    CustomError,
+    InvalidActiveProject,
+    InvalidResource,
+    NoActiveProject,
+    NoChangeDetected,
+)
 from ..filetransfer.common import resolve_question_flag
 from ..handlers.common import gather_safe
 from ..handlers.query import DatasetQuery, ProjectQuery, ScenarioQuery, ScopeQuery
@@ -180,6 +189,46 @@ class RemoteGetDatasetTypesHandler(RemoteEventHandler):
         return await self.client.request(req.GetDatasetTypes())
 
 
+class RemoteGetAttributeSchemaHandler(RemoteEventHandler):
+    __event__ = GetAttributeSchema
+
+    async def handle(self, event: GetAttributeSchema, mediator: Mediator):
+        result = await self.client.request(req.GetAttributeSchema())
+        return [self.parse_schema(attr) for attr in result]
+
+    @classmethod
+    def parse_schema(cls, schema: dict):
+        return {
+            "name": schema["name"],
+            "description": schema["description"],
+            "unit": schema["unit"],
+            "enum_name": schema["enum_name"],
+            **cls.parse_datatype(schema["data_type"]),
+        }
+
+    @staticmethod
+    def parse_datatype(datatype: str):
+        datatype = datatype.upper()
+        is_csr = False
+        unit_shape = []
+
+        if datatype.startswith("LIST"):
+            is_csr = True
+            datatype = datatype.removeprefix("LIST")
+            datatype = datatype.strip("<>")
+
+        if datatype.startswith("TUPLE"):
+            datatype = datatype.removeprefix("TUPLE")
+            datatype = datatype.strip("<>")
+            units = datatype.split(",")
+            unit_shape = [len(units)]
+            datatype = units[0]
+
+        if datatype == "FLOAT":
+            datatype = "DOUBLE"
+        return {"csr": is_csr, "unit_shape": unit_shape, "data_type": datatype}
+
+
 @requires_valid_project_uuid
 class RemoteGetAllDatasetsHandler(RemoteEventHandler):
     __event__ = GetAllDatasets
@@ -294,6 +343,25 @@ class RemoteUploadMultipleDatasetsHandler(RemoteEventHandler):
             strategy=ft.DatasetUploadStrategy(client=self.client),
         )
 
+
+class RemoteDownloadAttributeSchemaHanlder(RemoteEventHandler):
+    __event__ = DownloadAttributeSchema
+
+    async def handle(self, event: DownloadAttributeSchema, mediator: Mediator):
+        schema = await mediator.send(GetAttributeSchema())
+        if event.file_type == "csv":
+            raise CustomError("Downloading a schema as CSV is not implemented yet")
+
+        file = event.directory.path.joinpath(f"attributes.{event.file_type}")
+        if file.exists() and not self.params.overwrite:
+            do_overwrite = resolve_question_flag(
+                self.params.overwrite,
+                (f"directory already has an attribute schema file, do you wish to overwrite?"),
+            )
+            if not do_overwrite:
+                echo("Cowardly refusing to overwrite attribute schema")
+                return
+        file.write_text(json.dumps(schema))
 
 @requires_valid_project_uuid
 class RemoteDownloadDatasetHandler(RemoteEventHandler):

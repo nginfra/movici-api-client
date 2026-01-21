@@ -36,6 +36,7 @@ from ..utils import (
 from .common import get_scenario, get_scenario_uuid, resolve_data_directory
 
 
+# TODO: Views controller still uses old patterns. Convert to CQRS style
 class ViewController(Controller):
     name = "view"
     decorators = (valid_project_uuid, authenticated)

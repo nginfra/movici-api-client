@@ -2,7 +2,7 @@ import dataclasses
 import pathlib
 import typing as t
 
-from movici_api_client.cli.data_dir import DataDir
+from movici_api_client.cli.data_dir import DataDir, MoviciDataDir
 
 from ..cqrs import Event
 
@@ -15,6 +15,17 @@ class GetAllDatasets(Event):
 @dataclasses.dataclass
 class GetDatasetTypes(Event):
     pass
+
+
+@dataclasses.dataclass
+class GetAttributeSchema(Event):
+    pass
+
+
+@dataclasses.dataclass
+class DownloadAttributeSchema(Event):
+    directory: MoviciDataDir
+    file_type: t.Literal["json", "csv"] = "json"
 
 
 @dataclasses.dataclass

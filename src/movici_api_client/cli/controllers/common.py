@@ -39,7 +39,7 @@ def get_scenario(name_or_uuid, project_uuid, client=None):
 
 
 def resolve_data_directory(
-    path: t.Union[str, pathlib.Path, None],
+    path: pathlib.Path | None,
     purpose: t.Literal["datasets", "scenarios", "updates", "views", "project"],
 ):
     if data_dir := MoviciDataDir.resolve_from_subpath(path or pathlib.Path(".")):

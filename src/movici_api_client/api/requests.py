@@ -39,7 +39,7 @@ class CheckAuthToken(AuthRequest):
     auth_token: t.Optional[str] = None
 
     def make_request(self):
-        req = {
+        req: dict[str, t.Any] = {
             "method": "GET",
             "url": "auth",
         }
@@ -107,7 +107,6 @@ class GetSingleProject(DataEngineRequest):
 
 @dataclasses.dataclass
 class CreateProject(DataEngineRequest):
-
     name: str
     display_name: str
 
@@ -459,3 +458,11 @@ class GetDatasetTypes(DataEngineRequest):
     @simple_request
     def make_request(self):
         return urljoin("schema/dataset_types")
+
+
+@dataclasses.dataclass
+@unwrap_envelope("property_types")
+class GetAttributeSchema(DataEngineRequest):
+    @simple_request
+    def make_request(self):
+        return urljoin("schema/property_types")
