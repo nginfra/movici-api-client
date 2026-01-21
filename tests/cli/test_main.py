@@ -6,7 +6,7 @@ from movici_api_client.cli.config import read_config
 from movici_api_client.cli.controllers.config import ConfigController
 from movici_api_client.cli.controllers.datasets import DatasetController
 from movici_api_client.cli.controllers.projects import ProjectController
-from movici_api_client.cli.main import login, main, initialize_data_dir
+from movici_api_client.cli.main import initialize_data_dir, login, main
 
 
 @pytest.fixture
